@@ -6,10 +6,63 @@
 
     <org.xwalk.core.XWalkView
         android:id="@+id/xwalkWebView"
-        android:orientation="vertical"
+        android:visibility="gone"
+        android:orientation="horizontal"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:background="#000000"
         />
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:layout_marginTop="50dp"
+            android:id="@+id/reloadBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Neu laden"/>
+
+        <Button
+            android:layout_marginTop="20dp"
+            android:id="@+id/ipSetting"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Setup Ip"/>
+
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            android:id="@+id/inputGroup"
+            android:visibility="gone"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:orientation="horizontal">
+            <EditText
+                android:id="@+id/ipInput"
+                android:inputType="text"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+
+                android:layout_height="37dp"
+                android:hint="Ip address"
+                android:background="@android:color/white"
+                />
+
+            <Button android:id="@+id/okBtn"
+                android:layout_marginTop="-2dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="OK"
+                android:onClick="sendMessage" />
+        </LinearLayout>
+    </LinearLayout>
+
+
+
+
 
 </LinearLayout>
