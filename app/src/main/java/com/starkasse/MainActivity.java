@@ -36,11 +36,31 @@ public class MainActivity extends XWalkActivity {
 
         sharedPref = getPreferences(Context.MODE_PRIVATE);
 
+        if (sharedPref.getBoolean("NotFirstTime", true)) {
+            EnvUtils.updateEnv(this);
+            sharedPref.edit().putBoolean("NotFirstTime", false);
+        }
+
         setContentView(R.layout.activity_main);
+
+        findViewById(R.id.startLinux).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                EnvUtils.cli(MainActivity.this, "-p linux start","-m");
+            }
+        });
+
+        findViewById(R.id.stopLinux).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                EnvUtils.cli(MainActivity.this, "-p linux stop","-u");
+            }
+        });
 
         xWalkWebView = (XWalkView) findViewById(R.id.xwalkWebView);
         XWalkPreferences.setValue(XWalkPreferences.REMOTE_DEBUGGING, true);
 
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().getDecorView().setSystemUiVisibility(uiVisibility);
 
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);

@@ -25,6 +25,30 @@
             android:layout_height="wrap_content"
             android:text="Neu laden"/>
 
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <Button
+                android:layout_marginTop="50dp"
+                android:id="@+id/startLinux"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight=".50"
+                android:text="Start"/>
+
+            <Button
+                android:layout_marginTop="50dp"
+                android:id="@+id/stopLinux"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight=".50"
+                android:text="Stop"/>
+
+        </LinearLayout>
+
+
         <Button
             android:layout_marginTop="20dp"
             android:id="@+id/ipSetting"
