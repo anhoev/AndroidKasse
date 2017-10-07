@@ -420,7 +420,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
         });
 
-        //registerKioskModeScreenOffReceiver();
+        registerKioskModeScreenOffReceiver();
 
     }
 
@@ -451,7 +451,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                     findViewById(R.id.root1).setVisibility(View.VISIBLE);
                 }
 
-                if (wakeLock == null) {
+                /*if (wakeLock == null) {
                     PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                     wakeLock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "wakeup");
                 }
@@ -461,7 +461,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }
 
                 wakeLock.acquire();
-                wakeLock.release();
+                wakeLock.release();*/
             }
         }
     }
