@@ -31,23 +31,7 @@ public class ConnectionChangeReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(final Context context, Intent intent) {
-        this.context = context;
-        wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-        int dbm = wifiInfo.getRssi();
-        List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
-        i = list.get(0);
 
-        //Toast.makeText(context, wifiInfo.getBSSID() + " dbm :" + dbm, Toast.LENGTH_SHORT).show();
-
-        if (dbm > -85 && dbm != 0 && shouldOnResume) {
-            shouldOnResume = false;
-            try {
-                MainActivity.self.onResumeCb.call();
-            } catch (Exception e) {
-            }
-            //reconnect();
-        }
     }
 
     public void reconnect() {

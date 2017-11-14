@@ -4,6 +4,7 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -16,6 +17,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.BatteryManager;
@@ -31,10 +34,13 @@ import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -45,17 +51,26 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 
+import butterknife.ButterKnife;
+import butterknife.InjectView;
+
 import static android.content.ContentValues.TAG;
 import static android.view.KeyEvent.ACTION_DOWN;
+import static com.starkasse.ConnectionChangeReceiver.processing;
 
 
 public class MainActivity extends Activity implements SensorEventListener {
-    private WebView mainWebView;
     final int uiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
@@ -78,7 +93,30 @@ public class MainActivity extends Activity implements SensorEventListener {
     private boolean screenOn = true;
     private OnScreenOffReceiver onScreenOffReceiver;
     private PowerManager.WakeLock wakeLock;
-    private PowerManager.WakeLock wakeLock1;
+    private boolean currentFocus;
+    private Handler collapseNotificationHandler;
+
+    @InjectView(R.id.disableAdvertising)
+    View disableAdvertisingBtn;
+
+    @InjectView(R.id.devView)
+    View devView;
+
+    @InjectView(R.id.webView)
+    WebView mainWebView;
+
+    @InjectView(R.id.loading)
+    View loadingView;
+
+    @InjectView(R.id.serverNotOnline)
+    View serverNotOnlineView;
+
+    @InjectView(R.id.routerNotWorking)
+    View routerNotWorkingView;
+    private WifiManager wifiManager;
+    String ip;
+    private int devAnzahl;
+    private NotificationManager mNotificationManager;
 
     public void keepWiFiOn(boolean on) {
         if (wifiLock == null) {
@@ -100,6 +138,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
 
         if (mainWebView != null) {
             mainWebView = null;
@@ -115,7 +154,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         this.registerReceiver(this.mBatInfoReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
 
-        preventStatusBarExpansion();
+        preventStatusBarExpansion(10);
 
         if (!ready) return;
         try {
@@ -200,6 +239,42 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
     };
 
+    public void restart() {
+        Log.v("RESTART", "RESTART");
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
+                int mPendingIntentId = 123456;
+                PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
+                AlarmManager mgr = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+                mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent);
+                System.exit(0);
+            }
+        });
+    }
+
+    public void devMode() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mainWebView.setVisibility(View.INVISIBLE);
+                loadingView.setVisibility(View.INVISIBLE);
+                serverNotOnlineView.setVisibility(View.INVISIBLE);
+                routerNotWorkingView.setVisibility(View.INVISIBLE);
+                devView.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    public void logout() {
+        try {
+            mainWebView.evaluateJavascript("logout();", null);
+        } catch (Exception e) {
+        }
+    }
+
     class JsInterface {
         Context mContext;
 
@@ -209,18 +284,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         @JavascriptInterface
         public void restart() {
-            Log.v("RESTART", "RESTART");
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    Intent mStartActivity = new Intent(mContext, MainActivity.class);
-                    int mPendingIntentId = 123456;
-                    PendingIntent mPendingIntent = PendingIntent.getActivity(mContext, mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
-                    AlarmManager mgr = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
-                    mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent);
-                    System.exit(0);
-                }
-            });
+            MainActivity.this.restart();
         }
 
         @JavascriptInterface
@@ -231,6 +295,11 @@ public class MainActivity extends Activity implements SensorEventListener {
                 e.printStackTrace();
             }
             return 0;
+        }
+
+        @JavascriptInterface
+        public void showServerNotOnlineView() {
+            MainActivity.self.showServerNotOnlineView();
         }
 
         @JavascriptInterface
@@ -250,7 +319,12 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         @JavascriptInterface
         public void updateApk() {
-            updateApk();
+            MainActivity.this.apkUpdate();
+        }
+
+        @JavascriptInterface
+        public void devMode() {
+            MainActivity.this.devMode();
         }
     }
 
@@ -267,6 +341,18 @@ public class MainActivity extends Activity implements SensorEventListener {
         activityManager.moveTaskToFront(getTaskId(), 0);
     }
 
+    public void showServerNotOnlineView() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                serverNotOnlineView.setVisibility(View.VISIBLE);
+                mainWebView.setVisibility(View.INVISIBLE);
+                mainWebView.loadUrl("about:blank");
+                checkNetworkAndLoad();
+            }
+        });
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -280,10 +366,10 @@ public class MainActivity extends Activity implements SensorEventListener {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         setContentView(R.layout.activity_main);
+        ButterKnife.inject(this);
 
         keepWiFiOn(true);
 
-        mainWebView = (WebView) findViewById(R.id.webView);
         mainWebView.setWebContentsDebuggingEnabled(true);
 
         final WebSettings webSettings = mainWebView.getSettings();
@@ -292,35 +378,48 @@ public class MainActivity extends Activity implements SensorEventListener {
         final JsInterface jsInterface = new JsInterface(this);
         mainWebView.addJavascriptInterface(jsInterface, "Android");
 
-        final String ip = sharedPref.getString("ip", null);
+        ip = sharedPref.getString("ip", null);
 
         // Set UI Client (Start stop animations)
         mainWebView.setWebViewClient(new WebViewClient() {
+            public boolean hasErr = false;
+
+            @SuppressWarnings("deprecation")
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                view.setVisibility(View.GONE);
-
+                hasErr = true;
+                mainWebView.setVisibility(View.INVISIBLE);
+                serverNotOnlineView.setVisibility(View.VISIBLE);
+                if (!autoReloadValue) return;
                 new android.os.Handler().postDelayed(
                         new Runnable() {
                             public void run() {
                                 if (!TextUtils.isEmpty(ip)) {
-                                    mainWebView.setVisibility(View.VISIBLE);
+                                    hasErr = false;
                                     mainWebView.loadUrl("http://" + ip + ":8888");
                                 }
                             }
                         },
                         5000);
-                // Do something
+            }
+
+            @TargetApi(android.os.Build.VERSION_CODES.M)
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError rerr) {
+                onReceivedError(view, rerr.getErrorCode(), rerr.getDescription().toString(), req.getUrl().toString());
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (!hasErr) {
+                    serverNotOnlineView.setVisibility(View.INVISIBLE);
+                    mainWebView.setVisibility(View.VISIBLE);
+                    ready = true;
+                }
+
             }
         });
-
-        autoReloadInit();
-
-        if (!TextUtils.isEmpty(ip) && autoReloadValue) {
-            mainWebView.setVisibility(View.VISIBLE);
-            mainWebView.loadUrl("http://" + ip + ":8888", null);
-            ready = true;
-        }
 
         makeKioskMode();
 
@@ -372,14 +471,14 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
         });
 
-        findViewById(R.id.root).setOnTouchListener(new View.OnTouchListener() {
+        findViewById(R.id.root1).setOnTouchListener(new View.OnTouchListener() {
             private GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
                 @Override
                 public boolean onDoubleTap(MotionEvent e) {
                     if (screenOn == false) {
                         screenOn = true;
                         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                        findViewById(R.id.root1).setVisibility(View.VISIBLE);
+                        findViewById(R.id.root1).setVisibility(View.INVISIBLE);
                     }
 
                     return super.onDoubleTap(e);
@@ -401,28 +500,83 @@ public class MainActivity extends Activity implements SensorEventListener {
         findViewById(R.id.openSetting).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                /*if (wakeLock1 == null) {
-                    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-                    wakeLock1 = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "screenoff");
-                }
-
-                if (wakeLock1.isHeld()) {
-                    wakeLock1.release(); // release old wake lock
-                }
-
-                wakeLock1.acquire();*/
-
-
-                //wakeLock1.release();
-
-                //Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 1000);
                 startActivityForResult(new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
             }
         });
 
         registerKioskModeScreenOffReceiver();
 
+        disableAdvertisingBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    Runtime.getRuntime().exec(new String[]{"sh", "-c", "pm clear com.amazon.kindle.kso"});
+                    Runtime.getRuntime().exec(new String[]{"sh", "-c", "pm hide com.amazon.kindle.kso"});
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        autoReloadInit();
+
+        if (autoReloadValue && !TextUtils.isEmpty(ip)) {
+            devView.setVisibility(View.INVISIBLE);
+            loadingView.setVisibility(View.VISIBLE);
+
+            // check wifi on
+            wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED) {
+                wifiManager.setWifiEnabled(true);
+                new android.os.Handler().postDelayed(
+                        new Runnable() {
+                            public void run() {
+                                checkNetworkAndLoad();
+                            }
+                        },
+                        7000);
+            } else {
+                checkNetworkAndLoad();
+            }
+
+
+        }
+
+        devAnzahl = 0;
+        View.OnClickListener devListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (devAnzahl == 3) {
+                    devAnzahl = 0;
+                    devMode();
+                } else {
+                    devAnzahl++;
+                }
+            }
+        };
+        serverNotOnlineView.setOnClickListener(devListener);
+        loadingView.setOnClickListener(devListener);
+        routerNotWorkingView.setOnClickListener(devListener);
     }
+
+    public void checkNetworkAndLoad() {
+        if (!autoReloadValue) return;
+        ConnectivityManager cm = (ConnectivityManager) getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        if (null == activeNetwork) {
+            routerNotWorkingView.setVisibility(View.VISIBLE);
+            new android.os.Handler().postDelayed(
+                    new Runnable() {
+                        public void run() {
+                            checkNetworkAndLoad();
+                        }
+                    },
+                    5000);
+        } else {
+            mainWebView.loadUrl("http://" + ip + ":8888", null);
+        }
+    }
+
 
     private boolean checkSystemWritePermission() {
         boolean retVal = true;
@@ -448,10 +602,10 @@ public class MainActivity extends Activity implements SensorEventListener {
                 if (screenOn == false) {
                     screenOn = true;
                     Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                    findViewById(R.id.root1).setVisibility(View.VISIBLE);
+                    findViewById(R.id.root1).setVisibility(View.INVISIBLE);
                 }
 
-                /*if (wakeLock == null) {
+                if (wakeLock == null) {
                     PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                     wakeLock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "wakeup");
                 }
@@ -461,7 +615,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }
 
                 wakeLock.acquire();
-                wakeLock.release();*/
+                wakeLock.release();
             }
         }
     }
@@ -486,7 +640,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (screenOn) {
                 screenOn = false;
                 Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
-                findViewById(R.id.root1).setVisibility(View.INVISIBLE);
+                findViewById(R.id.root1).setVisibility(View.VISIBLE);
             }
         }
     };
@@ -514,12 +668,12 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (screenOn == false) {
                 screenOn = true;
                 Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                findViewById(R.id.root1).setVisibility(View.VISIBLE);
+                findViewById(R.id.root1).setVisibility(View.INVISIBLE);
                 resetDisconnectTimer();
             } else {
                 screenOn = false;
                 Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
-                findViewById(R.id.root1).setVisibility(View.INVISIBLE);
+                findViewById(R.id.root1).setVisibility(View.VISIBLE);
             }
 
             return true;
@@ -558,7 +712,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
     }
 
-    public void preventStatusBarExpansion() {
+    public void preventStatusBarExpansion(int height) {
 
         WindowManager manager = ((WindowManager) this.getApplicationContext().getSystemService(Context.WINDOW_SERVICE));
 
@@ -578,7 +732,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             result = 5; // 60px Fallback
         }
 
-        localLayoutParams.height = 5;
+        localLayoutParams.height = height;
         localLayoutParams.format = PixelFormat.TRANSPARENT;
 
         customViewGroup view = new customViewGroup(this);
@@ -590,13 +744,21 @@ public class MainActivity extends Activity implements SensorEventListener {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == -1010101) {
             if (Settings.canDrawOverlays(this)) {
-                preventStatusBarExpansion();
+                preventStatusBarExpansion(10);
             }
         }
     }
 
+    int backAnzahl = 0;
+
     @Override
     public void onBackPressed() {
+        if (backAnzahl == 3) {
+            backAnzahl = 0;
+            restart();
+        } else {
+            backAnzahl++;
+        }
     }
 
     private void makeKioskMode() {
@@ -608,10 +770,28 @@ public class MainActivity extends Activity implements SensorEventListener {
                 startActivityForResult(intent, -1010101);
             }
         } else {
-            preventStatusBarExpansion();
+            preventStatusBarExpansion(10);
         }
 
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        int orientation;
+        int rotation = ((WindowManager) getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
+        switch (rotation) {
+            case Surface.ROTATION_0:
+                orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+                break;
+            case Surface.ROTATION_90:
+                orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+                break;
+            case Surface.ROTATION_270:
+                orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+                break;
+            default:
+                orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+                break;
+        }
+
+        setRequestedOrientation(orientation);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LOCKED);
 
         View decorView = getWindow().getDecorView();
         decorView.setOnSystemUiVisibilityChangeListener
@@ -626,20 +806,32 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         // prevent lockscreen
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+
+        mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
     }
 
     @Override
     public void onStop() {
         super.onStop();
         stopDisconnectTimer();
+        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        //if (hasFocus) {
         getWindow().getDecorView().setSystemUiVisibility(uiVisibility);
-        //}
+
+        currentFocus = hasFocus;
+
+        if (!hasFocus) {
+            // Method that handles loss of window focus
+            preventStatusBarExpansion(10);
+        } else {
+            preventStatusBarExpansion(10);
+        }
+
+
     }
 
     public void apkUpdate() {
@@ -648,5 +840,4 @@ public class MainActivity extends Activity implements SensorEventListener {
         final String ip = sharedPref.getString("ip", null);
         atualizaApp.execute("http://" + ip + ":8888/apk/starkasse.apk");
     }
-
 }

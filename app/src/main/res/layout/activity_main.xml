@@ -1,4 +1,4 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
@@ -6,95 +6,148 @@
     android:orientation="vertical">
 
     <LinearLayout
+        android:id="@+id/devView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/reloadBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="50dp"
+            android:text="Neu laden" />
+
+        <Button
+            android:id="@+id/ipSetting"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Setup Ip" />
+
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            android:id="@+id/inputGroup"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/ipInput"
+                android:layout_width="0dp"
+                android:layout_height="37dp"
+                android:layout_weight="1"
+
+                android:background="@android:color/white"
+                android:hint="Ip address"
+                android:inputType="text" />
+
+            <Button
+                android:id="@+id/okBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="-2dp"
+                android:onClick="sendMessage"
+                android:text="OK" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/sensor"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white" />
+
+        <CheckBox
+            android:id="@+id/autoReload"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto Reload"
+            android:textColor="@android:color/white" />
+
+        <Button
+            android:id="@+id/updateApk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Update Apk" />
+
+        <Button
+            android:id="@+id/openSetting"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Setting" />
+
+        <Button
+            android:id="@+id/disableAdvertising"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="disable advertising" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:visibility="gone"
+        android:id="@+id/loading"
+        android:orientation="vertical"
+        android:background="@android:color/black"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <TextView
+            android:textAlignment="center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:text="LOADING..."/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:visibility="gone"
+        android:id="@+id/serverNotOnline"
+        android:orientation="vertical"
+        android:background="@android:color/black"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <TextView
+            android:textAlignment="center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:text="Kasse ist noch nicht eingeschaltet"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:visibility="gone"
+        android:id="@+id/routerNotWorking"
+        android:orientation="vertical"
+        android:background="@android:color/black"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <TextView
+            android:textAlignment="center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:text="Router funktioniert nicht"/>
+    </LinearLayout>
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:orientation="horizontal"
+        android:visibility="gone"></WebView>
+
+    <LinearLayout
+        android:visibility="gone"
         android:id="@+id/root1"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
+        android:background="@android:color/black"
         android:orientation="vertical">
-
-        <WebView
-            android:id="@+id/webView"
-            android:layout_width="fill_parent"
-            android:layout_height="fill_parent"
-            android:orientation="horizontal"
-            android:visibility="gone"></WebView>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <Button
-                android:id="@+id/reloadBtn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="50dp"
-                android:text="Neu laden" />
-
-            <Button
-                android:id="@+id/ipSetting"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="Setup Ip" />
-
-            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:id="@+id/inputGroup"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="5dp"
-                android:layout_marginTop="20dp"
-                android:orientation="horizontal"
-                android:visibility="gone">
-
-                <EditText
-                    android:id="@+id/ipInput"
-                    android:layout_width="0dp"
-                    android:layout_height="37dp"
-                    android:layout_weight="1"
-
-                    android:background="@android:color/white"
-                    android:hint="Ip address"
-                    android:inputType="text" />
-
-                <Button
-                    android:id="@+id/okBtn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="-2dp"
-                    android:onClick="sendMessage"
-                    android:text="OK" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/sensor"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@android:color/white" />
-
-            <CheckBox
-                android:id="@+id/autoReload"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Auto Reload"
-                android:textColor="@android:color/white" />
-
-            <Button
-                android:id="@+id/updateApk"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="Update Apk" />
-
-            <Button
-                android:id="@+id/openSetting"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="Setting" />
-
-        </LinearLayout>
     </LinearLayout>
-
-
-</LinearLayout>
+</FrameLayout>

@@ -23,12 +23,7 @@ import static com.starkasse.ConnectionChangeReceiver.processing;
 public class ConnectionReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-        if (null == activeNetwork && processing == false) {
-            Log.d("ConnectionReceiver", "auto reconnect!");
-            ConnectionChangeReceiver.self.reconnect();
-            Toast.makeText(context, "auto reconnect!", Toast.LENGTH_SHORT).show();
-        }
+        WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+        if (wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED) wifiManager.setWifiEnabled(true);
     }
 }
