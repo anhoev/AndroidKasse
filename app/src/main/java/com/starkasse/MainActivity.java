@@ -51,6 +51,12 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.amazon.android.webkit.AmazonWebKitFactories;
+import com.amazon.android.webkit.AmazonWebKitFactory;
+import com.amazon.android.webkit.AmazonWebSettings;
+import com.amazon.android.webkit.AmazonWebView;
+import com.amazon.android.webkit.AmazonWebViewClient;
+
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -102,8 +108,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @InjectView(R.id.devView)
     View devView;
 
-    @InjectView(R.id.webView)
-    WebView mainWebView;
+    AmazonWebView mainWebView;
 
     @InjectView(R.id.loading)
     View loadingView;
@@ -158,7 +163,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         if (!ready) return;
         try {
-            mainWebView.evaluateJavascript("onResume();", null);
+            mainWebView.loadUrl("javascript:onResume();", null);
         } catch (Exception e) {
         }
 
@@ -172,9 +177,9 @@ public class MainActivity extends Activity implements SensorEventListener {
             int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 0);
 
             if (level <= 5) {
-                mainWebView.evaluateJavascript("onBatteryLow && onBatteryLow();", null);
+                mainWebView.loadUrl("javascript:onBatteryLow && onBatteryLow();", null);
             } else if (level > 20) {
-                mainWebView.evaluateJavascript("onBatteryEnough && onBatteryEnough();", null);
+                mainWebView.loadUrl("javascript:onBatteryEnough && onBatteryEnough();", null);
             }
         }
     };
@@ -189,14 +194,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         if ((y < -8 || y > 8) && !lock) {
             lock = true;
             try {
-                mainWebView.evaluateJavascript("lockTouch();", null);
+                mainWebView.loadUrl("javascript:lockTouch();", null);
             } catch (Exception e) {
             }
         }
         if ((y > -8 && y < 8) && lock) {
             lock = false;
             try {
-                mainWebView.evaluateJavascript("unlockTouch();", null);
+                mainWebView.loadUrl("javascript:unlockTouch();", null);
             } catch (Exception e) {
             }
         }
@@ -223,7 +228,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                                 new Runnable() {
                                     public void run() {
                                         try {
-                                            mainWebView.evaluateJavascript("onResume();", null);
+                                            mainWebView.loadUrl("javascript:onResume();", null);
                                             Toast.makeText(getApplicationContext(), "onResume", Toast.LENGTH_SHORT).show();
                                         } catch (Exception e) {
                                         }
@@ -270,7 +275,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     public void logout() {
         try {
-            mainWebView.evaluateJavascript("logout();", null);
+            mainWebView.loadUrl("javascript:logout();", null);
         } catch (Exception e) {
         }
     }
@@ -353,6 +358,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         });
     }
 
+    private static boolean sFactoryInit = false;
+    private AmazonWebKitFactory factory = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -370,9 +378,25 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         keepWiFiOn(true);
 
-        mainWebView.setWebContentsDebuggingEnabled(true);
+        if (!sFactoryInit) {
+            factory = AmazonWebKitFactories.getDefaultFactory();
+            if (factory.isRenderProcess(this)) {
+            } else {
+                factory.initialize(this.getApplicationContext());
+                factory.getCookieManager().setAcceptCookie(true);
 
-        final WebSettings webSettings = mainWebView.getSettings();
+                sFactoryInit = true;
+            }
+        } else {
+            factory = AmazonWebKitFactories.getDefaultFactory();
+        }
+        if (factory.getWebKitCapabilities().isDeveloperToolsSupported()) {
+            factory.enableDeveloperToolsUnix(this.getPackageName() + ".devtools");
+        }
+
+        mainWebView = (AmazonWebView) findViewById(R.id.webView);
+        factory.initializeWebView(mainWebView, 0xFFFFFF, false, null);
+        AmazonWebSettings webSettings = mainWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
 
         final JsInterface jsInterface = new JsInterface(this);
@@ -381,50 +405,49 @@ public class MainActivity extends Activity implements SensorEventListener {
         ip = sharedPref.getString("ip", null);
 
         // Set UI Client (Start stop animations)
-        mainWebView.setWebViewClient(new WebViewClient() {
-            public boolean hasErr = false;
+        mainWebView.setWebViewClient(new
 
-            @SuppressWarnings("deprecation")
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                hasErr = true;
-                mainWebView.setVisibility(View.INVISIBLE);
-                serverNotOnlineView.setVisibility(View.VISIBLE);
-                if (!autoReloadValue) return;
-                new android.os.Handler().postDelayed(
-                        new Runnable() {
-                            public void run() {
-                                if (!TextUtils.isEmpty(ip)) {
-                                    hasErr = false;
-                                    mainWebView.loadUrl("http://" + ip + ":8888");
-                                }
-                            }
-                        },
-                        5000);
-            }
+                                             AmazonWebViewClient() {
+                                                 public boolean hasErr = false;
 
-            @TargetApi(android.os.Build.VERSION_CODES.M)
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError rerr) {
-                onReceivedError(view, rerr.getErrorCode(), rerr.getDescription().toString(), req.getUrl().toString());
-            }
+                                                 @SuppressWarnings("deprecation")
+                                                 @Override
+                                                 public void onReceivedError(AmazonWebView view, int errorCode, String description, String
+                                                         failingUrl) {
+                                                     hasErr = true;
+                                                     mainWebView.setVisibility(View.INVISIBLE);
+                                                     serverNotOnlineView.setVisibility(View.VISIBLE);
+                                                     if (!autoReloadValue) return;
+                                                     new android.os.Handler().postDelayed(
+                                                             new Runnable() {
+                                                                 public void run() {
+                                                                     if (!TextUtils.isEmpty(ip)) {
+                                                                         hasErr = false;
+                                                                         mainWebView.loadUrl("http://" + ip + ":8888");
+                                                                     }
+                                                                 }
+                                                             },
+                                                             5000);
+                                                 }
 
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                if (!hasErr) {
-                    serverNotOnlineView.setVisibility(View.INVISIBLE);
-                    mainWebView.setVisibility(View.VISIBLE);
-                    ready = true;
-                }
+                                                 @Override
+                                                 public void onPageFinished(AmazonWebView view, String url) {
+                                                     super.onPageFinished(view, url);
+                                                     if (!hasErr) {
+                                                         serverNotOnlineView.setVisibility(View.INVISIBLE);
+                                                         mainWebView.setVisibility(View.VISIBLE);
+                                                         ready = true;
+                                                     }
 
-            }
-        });
+                                                 }
+                                             });
 
         makeKioskMode();
 
         Button reloadButton = (Button) findViewById(R.id.reloadBtn);
-        reloadButton.setOnClickListener(new View.OnClickListener() {
+        reloadButton.setOnClickListener(new View.OnClickListener()
+
+        {
             @Override
             public void onClick(View v) {
                 ready = true;
@@ -438,7 +461,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         final EditText ipInput = (EditText) findViewById(R.id.ipInput);
 
         anzahl = 0;
-        button.setOnClickListener(new View.OnClickListener() {
+        button.setOnClickListener(new View.OnClickListener()
+
+        {
             @Override
             public void onClick(View v) {
                 if (anzahl > 5) findViewById(R.id.inputGroup).setVisibility(View.VISIBLE);
@@ -446,67 +471,90 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
         });
 
-        findViewById(R.id.okBtn).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                sharedPref.edit().putString("ip", ipInput.getText().toString()).commit();
-            }
-        });
+        findViewById(R.id.okBtn).
+
+                setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        sharedPref.edit().putString("ip", ipInput.getText().toString()).commit();
+                    }
+                });
 
         ipInput.setText(ip);
 
         // sensor
 
-        sm = (SensorManager) getSystemService(SENSOR_SERVICE);
-        if (sm.getSensorList(Sensor.TYPE_ACCELEROMETER).size() != 0) {
+        sm = (SensorManager)
+
+                getSystemService(SENSOR_SERVICE);
+        if (sm.getSensorList(Sensor.TYPE_ACCELEROMETER).
+
+                size() != 0)
+
+        {
             Sensor s = sm.getSensorList(Sensor.TYPE_ACCELEROMETER).get(0);
             sm.registerListener(this, s, SensorManager.SENSOR_DELAY_NORMAL);
         }
 
-        sensorView = (TextView) findViewById(R.id.sensor);
-        findViewById(R.id.updateApk).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                apkUpdate();
-            }
-        });
+        sensorView = (TextView)
 
-        findViewById(R.id.root1).setOnTouchListener(new View.OnTouchListener() {
-            private GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
-                @Override
-                public boolean onDoubleTap(MotionEvent e) {
-                    if (screenOn == false) {
-                        screenOn = true;
-                        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                        findViewById(R.id.root1).setVisibility(View.INVISIBLE);
+                findViewById(R.id.sensor);
+
+        findViewById(R.id.updateApk).
+
+                setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        apkUpdate();
                     }
+                });
 
-                    return super.onDoubleTap(e);
-                }
+        findViewById(R.id.root1).
 
-            });
+                setOnTouchListener(new View.OnTouchListener() {
+                    private GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
+                        @Override
+                        public boolean onDoubleTap(MotionEvent e) {
+                            if (screenOn == false) {
+                                screenOn = true;
+                                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                                findViewById(R.id.root1).setVisibility(View.INVISIBLE);
+                            }
 
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                gestureDetector.onTouchEvent(event);
-                return true;
-            }
-        });
+                            return super.onDoubleTap(e);
+                        }
 
-        if (checkSystemWritePermission()) {
+                    });
+
+                    @Override
+                    public boolean onTouch(View v, MotionEvent event) {
+                        gestureDetector.onTouchEvent(event);
+                        return true;
+                    }
+                });
+
+        if (
+
+                checkSystemWritePermission())
+
+        {
             Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
         }
 
-        findViewById(R.id.openSetting).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivityForResult(new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
-            }
-        });
+        findViewById(R.id.openSetting).
+
+                setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        startActivityForResult(new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
+                    }
+                });
 
         registerKioskModeScreenOffReceiver();
 
-        disableAdvertisingBtn.setOnClickListener(new View.OnClickListener() {
+        disableAdvertisingBtn.setOnClickListener(new View.OnClickListener()
+
+        {
             @Override
             public void onClick(View v) {
                 try {
@@ -520,7 +568,9 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         autoReloadInit();
 
-        if (autoReloadValue && !TextUtils.isEmpty(ip)) {
+        if (autoReloadValue && !TextUtils.isEmpty(ip))
+
+        {
             devView.setVisibility(View.INVISIBLE);
             loadingView.setVisibility(View.VISIBLE);
 
@@ -710,6 +760,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             Log.v("customViewGroup", "**********Intercepted");
             return true;
         }
+
     }
 
     public void preventStatusBarExpansion(int height) {
