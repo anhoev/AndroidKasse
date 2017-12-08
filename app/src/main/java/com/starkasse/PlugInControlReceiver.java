@@ -14,6 +14,19 @@ public class PlugInControlReceiver extends BroadcastReceiver {
 
         if (action.equals(Intent.ACTION_POWER_CONNECTED)) {
             MainActivity.self.logout();
+            MainActivity.self.resetDisconnectTimer();
+
+            MainActivity.self.updateTime = true;
+
+            new android.os.Handler().postDelayed(
+                    new Runnable() {
+                        public void run() {
+                            MainActivity.self.updateTime = false;
+                        }
+                    },
+                    10000);
+        } else {
+
         }
     }
 }

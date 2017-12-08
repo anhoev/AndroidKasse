@@ -17,9 +17,12 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.BatteryManager;
 import android.os.Build;
@@ -39,15 +42,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -56,13 +55,12 @@ import com.amazon.android.webkit.AmazonWebKitFactory;
 import com.amazon.android.webkit.AmazonWebSettings;
 import com.amazon.android.webkit.AmazonWebView;
 import com.amazon.android.webkit.AmazonWebViewClient;
+import com.koushikdutta.async.future.FutureCallback;
+import com.koushikdutta.ion.Ion;
+import com.koushikdutta.ion.ProgressCallback;
 
+import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -73,7 +71,6 @@ import butterknife.InjectView;
 
 import static android.content.ContentValues.TAG;
 import static android.view.KeyEvent.ACTION_DOWN;
-import static com.starkasse.ConnectionChangeReceiver.processing;
 
 
 public class MainActivity extends Activity implements SensorEventListener {
@@ -89,18 +86,19 @@ public class MainActivity extends Activity implements SensorEventListener {
     private boolean ready = false;
     private SensorManager sm;
     private TextView sensorView;
-    private boolean lock;
+    public boolean lock = false;
     private CheckBox autoReload;
     private boolean autoReloadValue;
     private int anzahl;
     private ConnectionChangeReceiver connectionChangeReceiver;
     static MainActivity self;
     private PowerManager manager;
-    private boolean screenOn = true;
+    public boolean screenOn = true;
     private OnScreenOffReceiver onScreenOffReceiver;
-    private PowerManager.WakeLock wakeLock;
+    public PowerManager.WakeLock wakeLock;
     private boolean currentFocus;
     private Handler collapseNotificationHandler;
+    private MediaPlayer mediaPlayer;
 
     @InjectView(R.id.disableAdvertising)
     View disableAdvertisingBtn;
@@ -118,10 +116,44 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     @InjectView(R.id.routerNotWorking)
     View routerNotWorkingView;
+
+    @InjectView(R.id.downloadApk)
+    View downloadApkView;
+
+    @InjectView(R.id.downloadProgressBar)
+    ProgressBar downloadProgressBar;
+
+    @InjectView(R.id.wifiName)
+    EditText wifiNameEdittext;
+
+    @InjectView(R.id.wifiPassword)
+    EditText wifiPasswordEdittext;
+
+    @InjectView(R.id.staticIp)
+    EditText staticIpEdittext;
+
+    @InjectView(R.id.defaultGateway)
+    EditText defaultGatewayEdittext;
+
+    @InjectView(R.id.setWifi)
+    Button setWifiBtn;
+
+    @InjectView(R.id.wifiSetting)
+    Button wifiSettingBtn;
+
+    @InjectView(R.id.root1)
+    View overlay;
+
     private WifiManager wifiManager;
     String ip;
     private int devAnzahl;
     private NotificationManager mNotificationManager;
+    private int anzahlWifiClick;
+    boolean updateTime = false;
+    private OnScreenOnReceiver onScreenOnReceiver;
+    private ActivityManager activityManager;
+    private boolean turnOffScreenForce = false;
+    private OnUserPresentReceiver onUserPresentReceiver;
 
     public void keepWiFiOn(boolean on) {
         if (wifiLock == null) {
@@ -167,7 +199,11 @@ public class MainActivity extends Activity implements SensorEventListener {
         } catch (Exception e) {
         }
 
-        resetDisconnectTimer();
+        /*if (!screenOn) {
+            overlay.setVisibility(View.INVISIBLE);
+            screenOn = true;
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+        }*/
     }
 
     private BroadcastReceiver mBatInfoReceiver = new BroadcastReceiver() {
@@ -324,7 +360,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         @JavascriptInterface
         public void updateApk() {
-            MainActivity.this.apkUpdate();
+            MainActivity.this.apkUpdate2();
         }
 
         @JavascriptInterface
@@ -333,6 +369,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
     }
 
+    public boolean firstFocus = false;
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -340,10 +378,24 @@ public class MainActivity extends Activity implements SensorEventListener {
         unregisterReceiver(connectionChangeReceiver);
         unregisterReceiver(this.mBatInfoReceiver);
 
-        ActivityManager activityManager = (ActivityManager) getApplicationContext()
-                .getSystemService(Context.ACTIVITY_SERVICE);
+        activityManager = (ActivityManager) getApplicationContext().getSystemService(Context.ACTIVITY_SERVICE);
 
-        activityManager.moveTaskToFront(getTaskId(), 0);
+        if (updateTime && !firstFocus) {
+            firstFocus = true;
+            new android.os.Handler().postDelayed(
+                    new Runnable() {
+                        public void run() {
+                            activityManager.moveTaskToFront(getTaskId(), 0);
+                            installApk();
+                        }
+                    },
+                    500);
+        } else if (updateTime && firstFocus) {
+            firstFocus = false;
+            // do no thing
+        } else if (!updateTime) {
+            activityManager.moveTaskToFront(getTaskId(), 0);
+        }
     }
 
     public void showServerNotOnlineView() {
@@ -370,8 +422,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         ConnectionChangeReceiver.self = connectionChangeReceiver;
 
         sharedPref = getPreferences(Context.MODE_PRIVATE);
-
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         setContentView(R.layout.activity_main);
         ButterKnife.inject(this);
@@ -405,42 +455,40 @@ public class MainActivity extends Activity implements SensorEventListener {
         ip = sharedPref.getString("ip", null);
 
         // Set UI Client (Start stop animations)
-        mainWebView.setWebViewClient(new
+        mainWebView.setWebViewClient(new AmazonWebViewClient() {
+            public boolean hasErr = false;
 
-                                             AmazonWebViewClient() {
-                                                 public boolean hasErr = false;
+            @SuppressWarnings("deprecation")
+            @Override
+            public void onReceivedError(AmazonWebView view, int errorCode, String description, String
+                    failingUrl) {
+                hasErr = true;
+                mainWebView.setVisibility(View.INVISIBLE);
+                serverNotOnlineView.setVisibility(View.VISIBLE);
+                if (!autoReloadValue) return;
+                new android.os.Handler().postDelayed(
+                        new Runnable() {
+                            public void run() {
+                                if (!TextUtils.isEmpty(ip)) {
+                                    hasErr = false;
+                                    mainWebView.loadUrl("http://" + ip + ":8888");
+                                }
+                            }
+                        },
+                        5000);
+            }
 
-                                                 @SuppressWarnings("deprecation")
-                                                 @Override
-                                                 public void onReceivedError(AmazonWebView view, int errorCode, String description, String
-                                                         failingUrl) {
-                                                     hasErr = true;
-                                                     mainWebView.setVisibility(View.INVISIBLE);
-                                                     serverNotOnlineView.setVisibility(View.VISIBLE);
-                                                     if (!autoReloadValue) return;
-                                                     new android.os.Handler().postDelayed(
-                                                             new Runnable() {
-                                                                 public void run() {
-                                                                     if (!TextUtils.isEmpty(ip)) {
-                                                                         hasErr = false;
-                                                                         mainWebView.loadUrl("http://" + ip + ":8888");
-                                                                     }
-                                                                 }
-                                                             },
-                                                             5000);
-                                                 }
+            @Override
+            public void onPageFinished(AmazonWebView view, String url) {
+                super.onPageFinished(view, url);
+                if (!hasErr) {
+                    serverNotOnlineView.setVisibility(View.INVISIBLE);
+                    mainWebView.setVisibility(View.VISIBLE);
+                    ready = true;
+                }
 
-                                                 @Override
-                                                 public void onPageFinished(AmazonWebView view, String url) {
-                                                     super.onPageFinished(view, url);
-                                                     if (!hasErr) {
-                                                         serverNotOnlineView.setVisibility(View.INVISIBLE);
-                                                         mainWebView.setVisibility(View.VISIBLE);
-                                                         ready = true;
-                                                     }
-
-                                                 }
-                                             });
+            }
+        });
 
         makeKioskMode();
 
@@ -505,50 +553,43 @@ public class MainActivity extends Activity implements SensorEventListener {
                 setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        apkUpdate();
+                        apkUpdate2();
                     }
                 });
 
-        findViewById(R.id.root1).
-
-                setOnTouchListener(new View.OnTouchListener() {
-                    private GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
-                        @Override
-                        public boolean onDoubleTap(MotionEvent e) {
-                            if (screenOn == false) {
-                                screenOn = true;
-                                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                                findViewById(R.id.root1).setVisibility(View.INVISIBLE);
-                            }
-
-                            return super.onDoubleTap(e);
-                        }
-
-                    });
-
-                    @Override
-                    public boolean onTouch(View v, MotionEvent event) {
-                        gestureDetector.onTouchEvent(event);
-                        return true;
+        overlay.setOnTouchListener(new View.OnTouchListener() {
+            private GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onDoubleTap(MotionEvent e) {
+                    if (screenOn == false) {
+                        screenOn = true;
+                        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                        overlay.setVisibility(View.INVISIBLE);
+                        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
                     }
-                });
 
-        if (
+                    return super.onDoubleTap(e);
+                }
 
-                checkSystemWritePermission())
+            });
 
-        {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                gestureDetector.onTouchEvent(event);
+                return true;
+            }
+        });
+
+        if (checkSystemWritePermission()) {
             Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
         }
 
-        findViewById(R.id.openSetting).
-
-                setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        startActivityForResult(new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
-                    }
-                });
+        findViewById(R.id.openSetting).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivityForResult(new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
+            }
+        });
 
         registerKioskModeScreenOffReceiver();
 
@@ -568,9 +609,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         autoReloadInit();
 
-        if (autoReloadValue && !TextUtils.isEmpty(ip))
-
-        {
+        if (autoReloadValue && !TextUtils.isEmpty(ip)) {
             devView.setVisibility(View.INVISIBLE);
             loadingView.setVisibility(View.VISIBLE);
 
@@ -607,6 +646,64 @@ public class MainActivity extends Activity implements SensorEventListener {
         serverNotOnlineView.setOnClickListener(devListener);
         loadingView.setOnClickListener(devListener);
         routerNotWorkingView.setOnClickListener(devListener);
+
+        initWifiSetup();
+    }
+
+    public void initWifiSetup() {
+        wifiNameEdittext.setText(sharedPref.getString("wifiName", ""));
+        wifiPasswordEdittext.setText(sharedPref.getString("wifiPassword", ""));
+        staticIpEdittext.setText(sharedPref.getString("staticIp", ""));
+        defaultGatewayEdittext.setText(sharedPref.getString("defaultGateway", ""));
+
+        setWifiBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sharedPref.edit().putString("wifiName", wifiNameEdittext.getText().toString()).commit();
+                sharedPref.edit().putString("wifiPassword", wifiPasswordEdittext.getText().toString()).commit();
+                sharedPref.edit().putString("staticIp", staticIpEdittext.getText().toString()).commit();
+                sharedPref.edit().putString("defaultGateway", defaultGatewayEdittext.getText().toString()).commit();
+            }
+        });
+
+        anzahlWifiClick = 0;
+        wifiSettingBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (anzahlWifiClick > 5)
+                    findViewById(R.id.wifiContainer).setVisibility(View.VISIBLE);
+                anzahlWifiClick++;
+            }
+        });
+    }
+
+    public void forceWifi() {
+        if (TextUtils.isEmpty(sharedPref.getString("wifiName", ""))) return;
+        List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
+        for (WifiConfiguration i : list) {
+            wifiManager.removeNetwork(i.networkId);
+            wifiManager.saveConfiguration();
+        }
+
+        WifiConfiguration conf = new WifiConfiguration();
+        conf.SSID = "\"" + sharedPref.getString("wifiName", "") + "\"";
+        conf.preSharedKey = "\"" + sharedPref.getString("wifiPassword", "") + "\"";
+
+        try {
+            WifiUtils.changeWifiConfiguration(conf, false, sharedPref.getString("staticIp", ""), 0, "8.8.8.8", sharedPref.getString("defaultGateway", ""));
+            wifiManager.addNetwork(conf); //apply the setting
+            wifiManager.saveConfiguration(); //Save it
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            wifiManager.disconnect();
+            wifiManager.enableNetwork(wifiManager.getConfiguredNetworks().get(0).networkId, true);
+            wifiManager.reconnect();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void checkNetworkAndLoad() {
@@ -615,15 +712,28 @@ public class MainActivity extends Activity implements SensorEventListener {
         NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
         if (null == activeNetwork) {
             routerNotWorkingView.setVisibility(View.VISIBLE);
+            forceWifi();
             new android.os.Handler().postDelayed(
                     new Runnable() {
                         public void run() {
                             checkNetworkAndLoad();
                         }
                     },
-                    5000);
+                    8000);
         } else {
-            mainWebView.loadUrl("http://" + ip + ":8888", null);
+            if (!("\"" + sharedPref.getString("wifiName", "") + "\"").equals(wifiManager.getConnectionInfo().getSSID())) {
+                forceWifi();
+                routerNotWorkingView.setVisibility(View.VISIBLE);
+                new android.os.Handler().postDelayed(
+                        new Runnable() {
+                            public void run() {
+                                checkNetworkAndLoad();
+                            }
+                        },
+                        8000);
+            } else {
+                mainWebView.loadUrl("http://" + ip + ":8888", null);
+            }
         }
     }
 
@@ -645,16 +755,18 @@ public class MainActivity extends Activity implements SensorEventListener {
         startActivity(intent);
     }
 
+    public boolean isPlugged(Context context) {
+        Intent intent = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+        return plugged == BatteryManager.BATTERY_PLUGGED_AC || plugged == BatteryManager.BATTERY_PLUGGED_USB;
+    }
+
     public class OnScreenOffReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-                if (screenOn == false) {
-                    screenOn = true;
-                    Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                    findViewById(R.id.root1).setVisibility(View.INVISIBLE);
-                }
-
+            if (!Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
+            resetDisconnectTimer();
+            if (!isPlugged(getApplicationContext()) && !turnOffScreenForce) {
                 if (wakeLock == null) {
                     PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                     wakeLock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "wakeup");
@@ -666,21 +778,119 @@ public class MainActivity extends Activity implements SensorEventListener {
 
                 wakeLock.acquire();
                 wakeLock.release();
+
+                if (screenOn == false) {
+                    screenOn = true;
+                    Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                    overlay.setVisibility(View.INVISIBLE);
+                }
+
+                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
+            } else if (isPlugged(getApplicationContext())) {
+                playMusic();
+            } else if (turnOffScreenForce) {
+                turnOffScreenForce = false;
             }
+        }
+    }
+
+    public class OnScreenOnReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            stopDisconnectTimer();
+            if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (screenOn == false) {
+                            screenOn = true;
+                            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                            overlay.setVisibility(View.INVISIBLE);
+                        }
+                        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
+                        sleepHandler();
+                    }
+                });
+                stopMusic();
+                activityManager.moveTaskToFront(getTaskId(), 0);
+            }
+        }
+    }
+
+    public class OnUserPresentReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            resetDisconnectTimer();
         }
     }
 
     private void registerKioskModeScreenOffReceiver() {
         // register screen off receiver
-        final IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
         onScreenOffReceiver = new OnScreenOffReceiver();
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
         registerReceiver(onScreenOffReceiver, filter);
+
+        onScreenOnReceiver = new OnScreenOnReceiver();
+        IntentFilter filter1 = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        registerReceiver(onScreenOnReceiver, filter1);
+
+        onUserPresentReceiver = new OnUserPresentReceiver();
+        IntentFilter filter2 = new IntentFilter(Intent.ACTION_USER_PRESENT);
+        registerReceiver(onUserPresentReceiver, filter2);
     }
 
-    public static final long DISCONNECT_TIMEOUT = 2 * 60 * 1000;
-
-    private Handler disconnectHandler = new Handler() {
+    public Handler disconnectHandler = new Handler() {
         public void handleMessage(Message msg) {
+        }
+    };
+
+    public Handler disconnectHandler2 = new Handler() {
+        public void handleMessage(Message msg) {
+        }
+    };
+
+    public void turnOffScreen() {
+        playMusic();
+
+        turnOffScreenForce = true;
+        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 0);
+    }
+
+    public void stopMusic() {
+        if (mediaPlayer == null) return;
+        if (mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+        }
+    }
+
+    public void playMusic() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (mediaPlayer == null) {
+                    mediaPlayer = MediaPlayer.create(MainActivity.self, R.raw.sound);
+                    mediaPlayer.setVolume(0, 0);
+                    mediaPlayer.setLooping(true);
+                    mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                }
+
+                if (!mediaPlayer.isPlaying()) {
+                    mediaPlayer.start();
+                }
+            }
+        });
+    }
+
+    private Runnable disconnectCallback2 = new Runnable() {
+        @Override
+        public void run() {
+            if (screenOn) {
+                screenOn = false;
+                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+                overlay.setVisibility(View.VISIBLE);
+            }
+
+            turnOffScreen();
         }
     };
 
@@ -690,18 +900,30 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (screenOn) {
                 screenOn = false;
                 Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
-                findViewById(R.id.root1).setVisibility(View.VISIBLE);
+                overlay.setVisibility(View.VISIBLE);
+            }
+
+            if (isPlugged(getApplicationContext())) {
+                turnOffScreen();
+                return;
             }
         }
     };
 
     public void resetDisconnectTimer() {
         disconnectHandler.removeCallbacks(disconnectCallback);
-        disconnectHandler.postDelayed(disconnectCallback, DISCONNECT_TIMEOUT);
+        disconnectHandler.postDelayed(disconnectCallback, 2 * 60 * 1000);
+        sleepHandler();
+    }
+
+    public void sleepHandler() {
+        disconnectHandler2.removeCallbacks(disconnectCallback2);
+        disconnectHandler2.postDelayed(disconnectCallback2, 30 * 60 * 1000);
     }
 
     public void stopDisconnectTimer() {
         disconnectHandler.removeCallbacks(disconnectCallback);
+        disconnectHandler2.removeCallbacks(disconnectCallback2);
     }
 
     @Override
@@ -715,17 +937,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (blockedKeys.contains(event.getKeyCode()) && event.getAction() == ACTION_DOWN) {
-            if (screenOn == false) {
-                screenOn = true;
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                findViewById(R.id.root1).setVisibility(View.INVISIBLE);
-                resetDisconnectTimer();
-            } else {
-                screenOn = false;
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
-                findViewById(R.id.root1).setVisibility(View.VISIBLE);
-            }
-
             return true;
         } else {
             return super.dispatchKeyEvent(event);
@@ -745,9 +956,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         });
     }
 
-    public class customViewGroup extends ViewGroup {
+    public class CustomViewGroup extends ViewGroup {
 
-        public customViewGroup(Context context) {
+        public CustomViewGroup(Context context) {
             super(context);
         }
 
@@ -763,8 +974,10 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     }
 
+    boolean firstTimepreventStatusBarExpansion = false;
     public void preventStatusBarExpansion(int height) {
-
+        if (firstTimepreventStatusBarExpansion) return;
+        firstTimepreventStatusBarExpansion = true;
         WindowManager manager = ((WindowManager) this.getApplicationContext().getSystemService(Context.WINDOW_SERVICE));
 
         WindowManager.LayoutParams localLayoutParams = new WindowManager.LayoutParams();
@@ -786,7 +999,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         localLayoutParams.height = height;
         localLayoutParams.format = PixelFormat.TRANSPARENT;
 
-        customViewGroup view = new customViewGroup(this);
+        CustomViewGroup view = new CustomViewGroup(this);
         manager.addView(view, localLayoutParams);
     }
 
@@ -855,8 +1068,6 @@ public class MainActivity extends Activity implements SensorEventListener {
                     }
                 });
 
-        // prevent lockscreen
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
     }
@@ -890,5 +1101,51 @@ public class MainActivity extends Activity implements SensorEventListener {
         atualizaApp.setContext(getApplicationContext());
         final String ip = sharedPref.getString("ip", null);
         atualizaApp.execute("http://" + ip + ":8888/apk/starkasse.apk");
+    }
+
+    public void apkUpdate2() {
+        runOnUiThread(new Runnable() {
+            public int lastStatus;
+
+            @Override
+            public void run() {
+                lastStatus = mainWebView.getVisibility();
+                mainWebView.setVisibility(View.INVISIBLE);
+                downloadApkView.setVisibility(View.VISIBLE);
+                final String ip = sharedPref.getString("ip", null);
+                Ion.with(getApplicationContext())
+                        .load("http://" + ip + ":8888/apk/starkasse.apk")
+                        .progressBar(downloadProgressBar)
+                        .progress(new ProgressCallback() {
+                            @Override
+                            public void onProgress(long downloaded, long total) {
+                                System.out.println("" + downloaded + " / " + total);
+                            }
+                        })
+                        .write(new File("/mnt/sdcard/Download/starkasse.apk"))
+                        .setCallback(new FutureCallback<File>() {
+                            @Override
+                            public void onCompleted(Exception e, File file) {
+                                downloadApkView.setVisibility(View.INVISIBLE);
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        updateTime = true;
+                                        mainWebView.setVisibility(lastStatus);
+                                        installApk();
+                                    }
+                                });
+
+                            }
+                        });
+            }
+        });
+    }
+
+    public void installApk() {
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(Uri.fromFile(new File("/mnt/sdcard/Download/starkasse.apk")), "application/vnd.android.package-archive");
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
     }
 }
