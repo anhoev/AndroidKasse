@@ -9,6 +9,7 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.util.Base64;
 import android.util.Log;
 
@@ -56,6 +57,10 @@ public class BluetoothServer {
         }
     };
     private Context context;
+    public Handler disconnectHandler = new Handler() {
+        public void handleMessage(Message msg) {
+        }
+    };
 
     public void uninit() {
         context.unregisterReceiver(myDevice);
@@ -101,24 +106,49 @@ public class BluetoothServer {
 
             server.post("/print", new HttpServerRequestCallback() {
                 @Override
-                public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
+                public void onRequest(AsyncHttpServerRequest request, final AsyncHttpServerResponse response) {
                     JSONObject json = ((JSONObjectBody) request.getBody()).get();
-                    String address, base64Bytes;
+                    final String address, base64Bytes;
 
                     try {
                         address = json.getString("address");
                         base64Bytes = json.getString("data");
-                        byte[] data = Base64.decode(base64Bytes, Base64.DEFAULT);
+                        final byte[] data = Base64.decode(base64Bytes, Base64.DEFAULT);
 
-                        sendData(address, data, response);
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                sendData(address, data, response);
+                            }
+                        }).start();
+
                     } catch (JSONException e) {
                     }
-
                 }
             });
 
         } catch (Exception e) {
         }
+    }
+
+    private Runnable disconnectCallback = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                Log.e("bluetooth", "disconnect !!!");
+                for (Map.Entry<String, BluetoothSocket> pair : socketMap.entrySet()) {
+                    pair.getValue().close();
+                    socketMap.remove(pair.getKey());
+                }
+            } catch (Exception e) {
+            }
+        }
+    };
+
+    public void resetDisconnectTimer() {
+        disconnectHandler.removeCallbacks(disconnectCallback);
+        disconnectHandler.postDelayed(disconnectCallback, 30 * 60 * 1000);
+        Log.d("bluetooth-server", "resetDisconnectTimer");
     }
 
     private void sendData(String address, final byte[] buf, final AsyncHttpServerResponse res) {
@@ -130,16 +160,31 @@ public class BluetoothServer {
                 socket = (BluetoothSocket) device.getClass().getMethod("createInsecureRfcommSocket", new Class[]{int.class}).invoke(device, 1);
             } catch (Exception e) {
                 e.printStackTrace();
+                Log.d("bluetooth", "reject");
                 res.send("false");
                 return;
             }
 
+            bluetoothAdapter.cancelDiscovery();
+
             try {
                 socket.connect();
-            } catch (IOException e) {
+            } catch (Exception e) {
+
+                if (socket != null) {
+                    try {
+                        socket.close();
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+
+                Log.d("bluetooth", "reject");
                 res.send("false");
                 return;
             }
+
+            resetDisconnectTimer();
 
             socketMap.put(address, socket);
         } else {

@@ -105,20 +105,75 @@
                 android:layout_height="wrap_content"
                 android:text="Disable Wifi Debug"/>
 
-            <EditText
-                android:id="@+id/domain"
-                android:layout_marginTop="2dp"
-                android:layout_width="300dp"
-                android:background="@android:color/white"
-                android:layout_height="36dp" />
-
             <Button
-                android:id="@+id/setSoftetherDomain"
+                android:id="@+id/downloadFromSmb"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Set Softether Domain"/>
+                android:text="Download From SMB"/>
+
+            <Button
+                android:id="@+id/downloadIndexFromSmb"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Download Index From SMB"/>
+
+            <Button
+                android:id="@+id/chmod"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="chmod"/>
 
         </LinearLayout>
+
+    <LinearLayout
+        android:layout_marginTop="50dp"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/startMongo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start mongo"/>
+
+        <Button
+            android:id="@+id/startNode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start nodejs"/>
+
+        <Button
+            android:id="@+id/stopMongo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Stop mongo"/>
+
+        <Button
+            android:id="@+id/stopNode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Stop nodejs"/>
+
+        <Button
+            android:id="@+id/repairMongo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Repair Mongo"/>
+
+        <Button
+            android:id="@+id/downloadDataFromSmb"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Download Data"/>
+
+        <Button
+            android:id="@+id/reinstallApk"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="reinstall apk"/>
+
+    </LinearLayout>
 
     <LinearLayout
         android:layout_marginTop="50dp"

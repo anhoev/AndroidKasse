@@ -1,37 +1,55 @@
 package com.starkasse;
 
+import android.annotation.TargetApi;
+import android.app.Activity;
 import android.app.AlarmManager;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.graphics.Color;
 import android.media.MediaRouter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 import android.text.Editable;
-import android.text.TextUtils;
 import android.text.TextWatcher;
-import android.util.Base64;
 import android.util.Log;
 import android.view.Display;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.ValueCallback;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
-import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.gson.Gson;
+import com.hierynomus.msdtyp.AccessMask;
+import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation;
+import com.hierynomus.mssmb2.SMB2CreateDisposition;
+import com.hierynomus.mssmb2.SMB2ShareAccess;
+import com.hierynomus.security.jce.JceSecurityProvider;
+import com.hierynomus.smbj.SMBClient;
+import com.hierynomus.smbj.SmbConfig;
+import com.hierynomus.smbj.auth.AuthenticationContext;
+import com.hierynomus.smbj.auth.NtlmAuthenticator;
+import com.hierynomus.smbj.connection.Connection;
+import com.hierynomus.smbj.session.Session;
+import com.hierynomus.smbj.share.Directory;
+import com.hierynomus.smbj.share.DiskShare;
 import com.koushikdutta.async.http.body.JSONObjectBody;
 import com.koushikdutta.async.http.server.AsyncHttpServer;
 import com.koushikdutta.async.http.server.AsyncHttpServerRequest;
@@ -47,6 +65,8 @@ import com.teamviewer.sdk.screensharing.api.TVSessionFactory;
 import net.posprinter.posprinterface.UiExecute;
 import net.posprinter.service.PosprinterService;
 
+import org.apache.commons.io.FileUtils;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.xwalk.core.JavascriptInterface;
@@ -55,16 +75,19 @@ import org.xwalk.core.XWalkPreferences;
 import org.xwalk.core.XWalkUIClient;
 import org.xwalk.core.XWalkView;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedWriter;
+import java.io.BufferedReader;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
+import java.io.InputStreamReader;
+import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
@@ -110,11 +133,23 @@ public class MainActivity extends XWalkActivity {
     @InjectView(R.id.setting)
     Button settingBtn;
 
-    @InjectView(R.id.domain)
-    EditText domain;
+    @InjectView(R.id.startMongo)
+    Button startMongoBtn;
 
-    @InjectView(R.id.setSoftetherDomain)
-    Button setSoftetherDomainBtn;
+    @InjectView(R.id.startNode)
+    Button startNodeBtn;
+
+    @InjectView(R.id.stopMongo)
+    Button stopMongoBtn;
+
+    @InjectView(R.id.stopNode)
+    Button stopNodeBtn;
+
+    @InjectView(R.id.downloadFromSmb)
+    Button downloadFromSmbBtn;
+
+    @InjectView(R.id.chmod)
+    Button chmodBtn;
 
     @InjectView(R.id.brightnessDown)
     Button brightnessDownBtn;
@@ -125,15 +160,27 @@ public class MainActivity extends XWalkActivity {
     @InjectView(R.id.wifiDebug)
     Button wifiDebugBtn;
 
+    @InjectView(R.id.downloadIndexFromSmb)
+    Button downloadIndexFromSmbBtn;
+
+    @InjectView(R.id.downloadDataFromSmb)
+    Button downloadDataFromSmbBtn;
+
     @InjectView(R.id.wifiDebugDeactive)
     Button wifiDebugDeactiveBtn;
+
+    @InjectView(R.id.repairMongo)
+    Button repairMongoBtn;
+
+    @InjectView(R.id.reinstallApk)
+    Button reinstallApkBtn;
 
     @InjectView(R.id.loading)
     View loadingView;
 
     static CustomerPresentation presentation;
     private BluetoothServer bluetoothServer;
-    private WifiManager wifiManager;
+    static WifiManager wifiManager;
     private TVSessionConfiguration config;
     private boolean autoReloadValue;
 
@@ -143,6 +190,9 @@ public class MainActivity extends XWalkActivity {
     boolean secondaryDeviceActive;
     String ipAddressForSecondaryDevice;
     private PowerManager.WakeLock wakeLock;
+    public Process processMongo;
+    public Process processNode;
+    public Utils utils = new Utils(this);
 
     void showLoading() {
         xWalkWebView.setVisibility(View.INVISIBLE);
@@ -181,7 +231,7 @@ public class MainActivity extends XWalkActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        configServer();
+        ConfigServer.configServer(server, this);
         server.listen(5000);
         serverGateway.listen(44818);
 
@@ -191,7 +241,8 @@ public class MainActivity extends XWalkActivity {
         sharedPref = getPreferences(Context.MODE_PRIVATE);
 
         if (sharedPref.getBoolean("NotFirstTime", true)) {
-            EnvUtils.updateEnv(this);
+            //EnvUtils.updateEnv(this);
+
             sharedPref.edit().putBoolean("NotFirstTime", false).commit();
         }
 
@@ -206,7 +257,7 @@ public class MainActivity extends XWalkActivity {
             public void onClick(View v) {
                 //EnvUtils.cli(MainActivity.this, "-p linux start", "-m");
                 stop();
-                startProgram();
+                utils.startProgram();
             }
         });
 
@@ -279,37 +330,24 @@ public class MainActivity extends XWalkActivity {
             }
         });
 
+        downloadFromSmbBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                            utils.downloadFromSmb();
+                        }
+                    }
+                }).start();
+            }
+        });
+
         settingBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startActivityForResult(new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
-            }
-        });
-
-        setSoftetherDomainBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String name = domain.getText().toString();
-                if (TextUtils.isEmpty(name)) return;
-
-                String data = "{\"name\":\"" + name + "\"}"; //data to post
-
-                OutputStream out = null;
-                try {
-
-                    URL url = new URL("localhost:8888/api/install-softether");
-                    HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
-                    urlConnection.setRequestProperty("Content-Type", "application/json");
-                    out = new BufferedOutputStream(urlConnection.getOutputStream());
-                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out, "UTF-8"));
-                    writer.write(data);
-                    writer.flush();
-                    writer.close();
-                    out.close();
-                    urlConnection.connect();
-                } catch (Exception e) {
-                    System.out.println(e.getMessage());
-                }
             }
         });
 
@@ -388,8 +426,91 @@ public class MainActivity extends XWalkActivity {
         }*/
 
         setWakelock();
-    }
 
+        startMongoBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                utils.startMongo();
+            }
+        });
+
+        startNodeBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                utils.startNodejs();
+            }
+        });
+
+        stopMongoBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                utils.stopMongo();
+            }
+        });
+
+        stopNodeBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                utils.stopNode();
+            }
+        });
+
+        chmodBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    String s = EnvUtils.isRooted() ? "su" : "sh";
+                    Log.d("chmod ", getApplicationInfo().dataDir + "/starkasse");
+                    Runtime.getRuntime().exec(new String[]{s, "-c", "chmod -R 777" + getApplicationInfo().dataDir + "/starkasse"});
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        downloadIndexFromSmbBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        utils.downloadIndexFromSmb();
+
+                    }
+                }).start();
+            }
+        });
+
+        downloadDataFromSmbBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        utils.downloadDataFromSmb();
+                    }
+                }).start();
+            }
+        });
+
+        repairMongoBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    utils.repairMongo(utils.getEnv());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        reinstallApkBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                installApk();
+            }
+        });
+    }
 
     public void setWakelock() {
         if (wakeLock == null) {
@@ -446,7 +567,9 @@ public class MainActivity extends XWalkActivity {
     }
 
     private void stop() {
-        EnvUtils.cli(MainActivity.this, "-p linux stop", "-u");
+        utils.stopNode();
+        utils.stopMongo();
+        //EnvUtils.cli(MainActivity.this, "-p linux stop", "-u");
     }
 
     class JsInterface {
@@ -518,6 +641,8 @@ public class MainActivity extends XWalkActivity {
         Thread thread = new Thread() {
             @Override
             public void run() {
+                utils.stopNode();
+                utils.stopMongo();
                 try {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", "reboot -p"});
                 } catch (Exception e) {
@@ -575,29 +700,6 @@ public class MainActivity extends XWalkActivity {
         });
     }
 
-    public boolean ping(String url) {
-        ConnectivityManager connMan = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo netInfo = connMan.getActiveNetworkInfo();
-        if (netInfo != null && netInfo.isConnected()) {
-            try {
-                URL urlServer = new URL(url);
-                HttpURLConnection urlConn = (HttpURLConnection) urlServer.openConnection();
-                urlConn.setConnectTimeout(500);
-                urlConn.connect();
-                if (urlConn.getResponseCode() == 200) {
-                    return true;
-                } else {
-                    return false;
-                }
-            } catch (MalformedURLException e1) {
-                return false;
-            } catch (IOException e) {
-                return false;
-            }
-        }
-        return false;
-    }
-
     private void startTeamviewer() {
         config = new TVSessionConfiguration.Builder(
                 new TVConfigurationID("p6m8ftq"))
@@ -618,114 +720,26 @@ public class MainActivity extends XWalkActivity {
                 });
     }
 
+    public void installApk() {
+        if (!EnvUtils.isRooted()) {
 
-    private void configServer() {
-        server.get("/startWebview", new HttpServerRequestCallback() {
-            @Override
-            public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                startWebview();
-                response.send("OK");
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(Uri.fromFile(new File("/sdcard/starkasse-main.apk")), "application/vnd.android.package-archive");
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } else {
+            Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
+            int mPendingIntentId = 123456;
+            PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
+            AlarmManager mgr = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+            mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 15000, mPendingIntent);
+
+            try {
+                Runtime.getRuntime().exec(new String[]{"su", "-c", "pm install -r /sdcard/starkasse-main.apk"}).waitFor();
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        });
-
-        server.get("/wifiList", new HttpServerRequestCallback() {
-            @Override
-            public void onRequest(AsyncHttpServerRequest request, final AsyncHttpServerResponse response) {
-                if (wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED)
-                    wifiManager.setWifiEnabled(true);
-
-                wifiManager.startScan();
-
-                List<ScanResult> results = wifiManager.getScanResults();
-                Gson gson = new Gson();
-                response.send(gson.toJson(results));
-            }
-        });
-
-        server.get("/reloadCustomerdisplay", new HttpServerRequestCallback() {
-            @Override
-            public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (presentation != null)
-                            presentation.startWebview();
-                    }
-                });
-                response.send("OK");
-            }
-        });
-
-        server.get("/isOnline", new HttpServerRequestCallback() {
-            @Override
-            public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                response.send(isOnline() ? "true" : "false");
-            }
-        });
-
-        server.post("/changeUrl", new HttpServerRequestCallback() {
-            @Override
-            public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                JSONObject json = ((JSONObjectBody) request.getBody()).get();
-                final String address;
-
-                try {
-                    address = json.getString("url");
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            xWalkWebView.loadUrl(address);
-                        }
-                    });
-                } catch (JSONException e) {
-                }
-            }
-        });
-
-        server.post("/connectToAp", new HttpServerRequestCallback() {
-            @Override
-            public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                JSONObject json = ((JSONObjectBody) request.getBody()).get();
-
-                try {
-                    final String ssid = json.getString("ssid");
-                    final String password = json.getString("password");
-
-                    List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
-                    for (WifiConfiguration i : list) {
-                        wifiManager.removeNetwork(i.networkId);
-                        wifiManager.saveConfiguration();
-                    }
-
-                    WifiConfiguration conf = new WifiConfiguration();
-                    conf.SSID = "\"" + ssid + "\"";
-                    conf.preSharedKey = "\"" + password + "\"";
-                    wifiManager.addNetwork(conf);
-
-                    List<WifiConfiguration> list2 = wifiManager.getConfiguredNetworks();
-                    for (WifiConfiguration i : list2) {
-                        if (i.SSID != null && i.SSID.equals("\"" + ssid + "\"")) {
-                            wifiManager.disconnect();
-                            wifiManager.enableNetwork(i.networkId, true);
-                            wifiManager.reconnect();
-
-                            break;
-                        }
-                    }
-
-                } catch (JSONException e) {
-                }
-
-                response.send("OK");
-            }
-        });
-    }
-
-    public boolean isOnline() {
-        ConnectivityManager cm =
-                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo netInfo = cm.getActiveNetworkInfo();
-        return netInfo != null && netInfo.isConnectedOrConnecting();
+        }
     }
 
     public void startWebview() {
@@ -738,17 +752,16 @@ public class MainActivity extends XWalkActivity {
                     xWalkWebView.loadUrl("http://localhost:8888");
                 }
 
-                if (presentation != null) {
-                    presentation.show();
-                    presentation.startWebview();
+                try {
+                    if (presentation != null) {
+                        presentation.show();
+                        presentation.startWebview();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
         });
-    }
-
-    void startProgram() {
-        showLoading();
-        EnvUtils.cli(MainActivity.this, "-p linux start", "-m");
     }
 
     @Override
@@ -759,6 +772,9 @@ public class MainActivity extends XWalkActivity {
         //}
     }
 
+    private ValueCallback<Uri> mUploadMessage;
+    private final static int FILECHOOSER_RESULTCODE = 1;
+
     @Override
     protected void onXWalkReady() {
         // Set UI Client (Start stop animations)
@@ -766,27 +782,41 @@ public class MainActivity extends XWalkActivity {
             boolean first = false;
 
             @Override
-            public void onPageLoadStopped(XWalkView view, String url, LoadStatus status) {
-                if (!url.isEmpty() && status == XWalkUIClient.LoadStatus.FAILED) {
-                    view.setVisibility(View.GONE);
-                    new android.os.Handler().postDelayed(
-                            new Runnable() {
-                                public void run() {
+            public void onPageLoadStopped(final XWalkView view, final String url, final LoadStatus status) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (!url.isEmpty() && status == XWalkUIClient.LoadStatus.FAILED) {
+                            view.setVisibility(View.GONE);
+                            new android.os.Handler().postDelayed(
+                                    new Runnable() {
+                                        public void run() {
 
-                                    first = true;
-                                    xWalkWebView.setVisibility(View.VISIBLE);
-                                    if (secondaryDeviceActive) {
-                                        xWalkWebView.loadUrl("http://" + ipAddressForSecondaryDevice + ":8888?secondaryDevice");
-                                    } else {
-                                        xWalkWebView.loadUrl("http://localhost:8888");
-                                    }
+                                            first = true;
+                                            xWalkWebView.setVisibility(View.VISIBLE);
+                                            if (secondaryDeviceActive) {
+                                                xWalkWebView.loadUrl("http://" + ipAddressForSecondaryDevice + ":8888?secondaryDevice");
+                                            } else {
+                                                xWalkWebView.loadUrl("http://localhost:8888");
+                                            }
 
-                                }
-                            },
-                            5000);
-                } else {
-                    xWalkWebView.setVisibility(View.VISIBLE);
-                }
+                                        }
+                                    },
+                                    5000);
+                        } else {
+                            xWalkWebView.setVisibility(View.VISIBLE);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void openFileChooser(XWalkView view, ValueCallback<Uri> uploadFile, String acceptType, String capture) {
+                mUploadMessage = uploadFile;
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("image/*");
+                startActivityForResult(Intent.createChooser(i, "File Chooser"), FILECHOOSER_RESULTCODE);
             }
         });
 
@@ -794,7 +824,7 @@ public class MainActivity extends XWalkActivity {
         xWalkWebView.addJavascriptInterface(jsInterface, "Android");
 
         if (autoReloadValue) {
-            if (!secondaryDeviceActive) startProgram();
+            if (!secondaryDeviceActive) utils.startProgram();
             new android.os.Handler().postDelayed(
                     new Runnable() {
                         public void run() {
@@ -802,6 +832,24 @@ public class MainActivity extends XWalkActivity {
                         }
                     },
                     10000);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        if (requestCode != FILECHOOSER_RESULTCODE) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            // Check that the response is a good one
+            if (resultCode == Activity.RESULT_OK) {
+                if (mUploadMessage != null) {
+                    String dataString = intent.getDataString();
+                    if (dataString != null) {
+                        mUploadMessage.onReceiveValue(Uri.parse(dataString));
+                        mUploadMessage = null;
+                    }
+                }
+            }
+
         }
     }
 

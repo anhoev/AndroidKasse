@@ -144,7 +144,7 @@ class EnvUtils {
      *
      * @return true if success
      */
-    private static boolean isRooted() {
+    public static boolean isRooted() {
         boolean result = false;
         OutputStream stdin = null;
         InputStream stdout = null;

@@ -9,6 +9,8 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import static android.content.ContentValues.TAG;
 
@@ -37,17 +39,17 @@ public class ConnectedThread extends Thread {
         try {
             tmpIn = socket.getInputStream();
             tmpOut = socket.getOutputStream();
-        } catch (IOException e) {
+        } catch (Exception e) {
             Log.e(TAG, "temp sockets not created", e);
         }
 
-        mmInStream =  new DataInputStream(tmpIn);
+        mmInStream = new DataInputStream(tmpIn);
         mmOutStream = tmpOut;
     }
 
     public void run() {
         Log.i(TAG, "BEGIN mConnectedThread");
-        byte[] buffer = new byte[10];
+        byte[] buffer = new byte[2];
         // Keep listening to the InputStream while connected
 
         while (_continue) {
@@ -56,18 +58,20 @@ public class ConnectedThread extends Thread {
                 int byteNum = mmInStream.read(buffer);
                 if (byteNum > 0) {
                     Log.e("starkasse.bluetooth", "print finished !!!");
+                    Log.d("bluetooth", "resolve");
                     res.send("true");
-                    //cancel();
+                    _continue = false;
                     break;
                 }
 
-            } catch (IOException e) {
-                //cancel();
+            } catch (Exception e) {
                 // Start the service over to restart listening mode
                 //BluetoothSerialService.this.start();
                 break;
             }
         }
+
+        server.resetDisconnectTimer();
     }
 
     /**
@@ -76,18 +80,31 @@ public class ConnectedThread extends Thread {
      * @param buffer The bytes to write
      */
     public void write(byte[] buffer) {
+        Log.i(TAG, "begin to write");
         try {
             mmOutStream.write(buffer);
             mmOutStream.flush();
-        } catch (IOException e) {
+            Log.i(TAG, "write successful !!!");
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    if (_continue) {
+                        Log.e("bluetooth", "TIMEOUT");
+                        _continue = false;
+                        res.send("true");
+                    }
+                    this.cancel();
+                }
+            }, 6000, 6000);
+        } catch (Exception e) {
             _continue = false;
             try {
-                server.socketMap.get(address).close();
+                if (server.socketMap.get(address) != null) server.socketMap.get(address).close();
                 server.socketMap.remove(address);
             } catch (IOException e1) {
             }
+            Log.d("bluetooth", "reject");
             res.send("false");
-
         }
     }
 
@@ -96,7 +113,7 @@ public class ConnectedThread extends Thread {
             mmSocket.close();
             server.socketMap.get(address).close();
             server.socketMap.remove(address);
-        } catch (IOException e) {
+        } catch (Exception e) {
             Log.e(TAG, "close() of connect socket failed", e);
         }
     }
