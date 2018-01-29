@@ -767,25 +767,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (!Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
             resetDisconnectTimer();
             if (!isPlugged(getApplicationContext()) && !turnOffScreenForce) {
-                if (wakeLock == null) {
-                    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-                    wakeLock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "wakeup");
-                }
-
-                if (wakeLock.isHeld()) {
-                    wakeLock.release(); // release old wake lock
-                }
-
-                wakeLock.acquire();
-                wakeLock.release();
-
-                if (screenOn == false) {
-                    screenOn = true;
-                    Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                    overlay.setVisibility(View.INVISIBLE);
-                }
-
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
+                playMusic();
             } else if (isPlugged(getApplicationContext())) {
                 playMusic();
             } else if (turnOffScreenForce) {
