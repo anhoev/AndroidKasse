@@ -39,33 +39,36 @@ public class MediaButtonIntentReceiver extends BroadcastReceiver {
                     wakeLock.release();
                     Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
 
-                    MainActivity.self.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (MainActivity.self.screenOn == false) {
-                                MainActivity.self.screenOn = true;
-                                Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                                MainActivity.self.overlay.setVisibility(View.INVISIBLE);
-                            }
+                    MainActivity.self.runOnUiThread(() -> {
+                        if (MainActivity.self.screenOn == false) {
+                            MainActivity.self.screenOn = true;
+                            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                            MainActivity.self.overlay.setVisibility(View.INVISIBLE);
                         }
                     });
                 } else {
-                    MainActivity.self.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (MainActivity.self.screenOn == false) {
+                    MainActivity.self.runOnUiThread(() -> {
+                        if (MainActivity.self.screenOn == false) {
 
-                                MainActivity.self.screenOn = true;
-                                Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
-                                MainActivity.self.overlay.setVisibility(View.INVISIBLE);
-                            } else {
-                                MainActivity.self.screenOn = false;
-                                Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
-                                MainActivity.self.overlay.setVisibility(View.VISIBLE);
-                            }
-                            MainActivity.self.resetDisconnectTimer();
+                            MainActivity.self.overlay.setVisibility(View.INVISIBLE);
+                        } else {
+
+                            MainActivity.self.overlay.setVisibility(View.VISIBLE);
                         }
                     });
+                    new android.os.Handler().postDelayed(
+                            () -> {
+                                if (MainActivity.self.screenOn == false) {
+                                    MainActivity.self.screenOn = true;
+                                    Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                                } else {
+                                    MainActivity.self.screenOn = false;
+                                    Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+                                }
+                            }
+                            , 30);
+
+                    MainActivity.self.resetDisconnectTimer();
                 }
             }
 

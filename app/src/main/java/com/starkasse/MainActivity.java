@@ -895,7 +895,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     boolean firstTimepreventStatusBarExpansion = false;
 
     public void preventStatusBarExpansion(int height) {
-        if (firstTimepreventStatusBarExpansion) return;
+        /*if (firstTimepreventStatusBarExpansion) return;
         firstTimepreventStatusBarExpansion = true;
         WindowManager manager = ((WindowManager) this.getApplicationContext().getSystemService(Context.WINDOW_SERVICE));
 
@@ -919,7 +919,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         localLayoutParams.format = PixelFormat.TRANSPARENT;
 
         CustomViewGroup view = new CustomViewGroup(this);
-        manager.addView(view, localLayoutParams);
+        manager.addView(view, localLayoutParams);*/
     }
 
     @TargetApi(Build.VERSION_CODES.M)
