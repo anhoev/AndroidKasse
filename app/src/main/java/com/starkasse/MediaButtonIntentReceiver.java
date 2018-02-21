@@ -42,8 +42,11 @@ public class MediaButtonIntentReceiver extends BroadcastReceiver {
                     MainActivity.self.runOnUiThread(() -> {
                         if (MainActivity.self.screenOn == false) {
                             MainActivity.self.screenOn = true;
-                            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
                             MainActivity.self.overlay.setVisibility(View.INVISIBLE);
+                            new android.os.Handler().postDelayed(
+                                    () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
+                                    , 30);
+
                         }
                     });
                 } else {
