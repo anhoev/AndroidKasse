@@ -45,7 +45,7 @@ public class MediaButtonIntentReceiver extends BroadcastReceiver {
                             MainActivity.self.overlay.setVisibility(View.INVISIBLE);
                             new android.os.Handler().postDelayed(
                                     () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
-                                    , 30);
+                                    , 50);
 
                         }
                     });
@@ -69,7 +69,7 @@ public class MediaButtonIntentReceiver extends BroadcastReceiver {
                                     Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
                                 }
                             }
-                            , 30);
+                            , 50);
 
                     MainActivity.self.resetDisconnectTimer();
                 }

@@ -175,7 +175,9 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+        new android.os.Handler().postDelayed(
+                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
+                , 50);
 
         if (mainWebView != null) {
             mainWebView = null;
@@ -285,7 +287,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                new android.os.Handler().postDelayed(
+                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
+                        , 50);
                 Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
                 int mPendingIntentId = 123456;
                 PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
@@ -539,7 +543,9 @@ public class MainActivity extends Activity implements SensorEventListener {
                 public boolean onDoubleTap(MotionEvent e) {
                     if (screenOn == false) {
                         screenOn = true;
-                        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                        new android.os.Handler().postDelayed(
+                                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
+                                , 50);
                         overlay.setVisibility(View.INVISIBLE);
                         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
                     }
@@ -729,7 +735,9 @@ public class MainActivity extends Activity implements SensorEventListener {
                 runOnUiThread(() -> {
                     if (screenOn == false) {
                         screenOn = true;
-                        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+                        new android.os.Handler().postDelayed(
+                                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
+                                , 50);
                         overlay.setVisibility(View.INVISIBLE);
                     }
                     Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
@@ -777,7 +785,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         playMusic();
 
         turnOffScreenForce = true;
-        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 0);
+        new android.os.Handler().postDelayed(
+                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0)
+                , 50);
     }
 
     public void stopMusic() {
@@ -807,7 +817,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         public void run() {
             if (screenOn) {
                 screenOn = false;
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+                new android.os.Handler().postDelayed(
+                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0)
+                        , 50);
                 overlay.setVisibility(View.VISIBLE);
             }
 
@@ -820,7 +832,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         public void run() {
             if (screenOn) {
                 screenOn = false;
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+                new android.os.Handler().postDelayed(
+                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0)
+                        , 50);
                 overlay.setVisibility(View.VISIBLE);
             }
 
@@ -992,7 +1006,9 @@ public class MainActivity extends Activity implements SensorEventListener {
     public void onStop() {
         super.onStop();
         stopDisconnectTimer();
-        Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+        new android.os.Handler().postDelayed(
+                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
+                , 50);
     }
 
     @Override
