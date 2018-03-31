@@ -66,7 +66,7 @@ public class MediaButtonIntentReceiver extends BroadcastReceiver {
                                     Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
                                 } else {
                                     MainActivity.self.screenOn = false;
-                                    Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
+                                    Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10);
                                 }
                             }
                             , 50);

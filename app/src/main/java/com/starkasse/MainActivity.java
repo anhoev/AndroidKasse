@@ -786,7 +786,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         turnOffScreenForce = true;
         new android.os.Handler().postDelayed(
-                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0)
+                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10)
                 , 50);
     }
 
@@ -818,7 +818,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (screenOn) {
                 screenOn = false;
                 new android.os.Handler().postDelayed(
-                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0)
+                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10)
                         , 50);
                 overlay.setVisibility(View.VISIBLE);
             }
@@ -833,7 +833,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (screenOn) {
                 screenOn = false;
                 new android.os.Handler().postDelayed(
-                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0)
+                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10)
                         , 50);
                 overlay.setVisibility(View.VISIBLE);
             }
@@ -847,7 +847,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     public void resetDisconnectTimer() {
         disconnectHandler.removeCallbacks(disconnectCallback);
-        disconnectHandler.postDelayed(disconnectCallback, 2 * 60 * 1000);
+        disconnectHandler.postDelayed(disconnectCallback, 4 * 60 * 1000);
         sleepHandler();
     }
 
