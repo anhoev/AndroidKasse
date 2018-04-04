@@ -1,1 +1,1 @@
-cp /Users/anhtran/IdeaProjects/CrosswalkDemo/app/build/outputs/apk/debug/app-debug.apk ~/Dropbox/Kasse/apk/Kindle
+cp /Users/anhtran/IdeaProjects/CrosswalkDemo/app/build/outputs/apk/debug/app-debug.apk ~/Dropbox/Kasse/apk/Kindle/starkasse.apk

@@ -28,6 +28,7 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
 import android.provider.Settings;
@@ -175,9 +176,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        new android.os.Handler().postDelayed(
-                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
-                , 50);
+        MainActivity.changeBrightness("high");
 
         if (mainWebView != null) {
             mainWebView = null;
@@ -287,9 +286,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                new android.os.Handler().postDelayed(
-                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
-                        , 50);
+                MainActivity.changeBrightness("high");
                 Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
                 int mPendingIntentId = 123456;
                 PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
@@ -543,9 +540,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 public boolean onDoubleTap(MotionEvent e) {
                     if (screenOn == false) {
                         screenOn = true;
-                        new android.os.Handler().postDelayed(
-                                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
-                                , 50);
+                        MainActivity.changeBrightness("high");
                         overlay.setVisibility(View.INVISIBLE);
                         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
                     }
@@ -735,9 +730,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 runOnUiThread(() -> {
                     if (screenOn == false) {
                         screenOn = true;
-                        new android.os.Handler().postDelayed(
-                                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
-                                , 50);
+                        MainActivity.changeBrightness("high");
                         overlay.setVisibility(View.INVISIBLE);
                     }
                     Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
@@ -785,9 +778,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         playMusic();
 
         turnOffScreenForce = true;
-        new android.os.Handler().postDelayed(
-                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10)
-                , 50);
+        MainActivity.changeBrightness("low");
     }
 
     public void stopMusic() {
@@ -817,9 +808,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         public void run() {
             if (screenOn) {
                 screenOn = false;
-                new android.os.Handler().postDelayed(
-                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10)
-                        , 50);
+                MainActivity.changeBrightness("low");
                 overlay.setVisibility(View.VISIBLE);
             }
 
@@ -832,9 +821,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         public void run() {
             if (screenOn) {
                 screenOn = false;
-                new android.os.Handler().postDelayed(
-                        () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 10)
-                        , 50);
+                MainActivity.changeBrightness("low");
                 overlay.setVisibility(View.VISIBLE);
             }
 
@@ -1006,9 +993,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     public void onStop() {
         super.onStop();
         stopDisconnectTimer();
-        new android.os.Handler().postDelayed(
-                () -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255)
-                , 50);
+        MainActivity.changeBrightness("high");
     }
 
     @Override
@@ -1068,5 +1053,17 @@ public class MainActivity extends Activity implements SensorEventListener {
         intent.setDataAndType(Uri.fromFile(new File("/mnt/sdcard/Download/starkasse.apk")), "application/vnd.android.package-archive");
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
+    }
+
+    public static void changeBrightness(String direction) {
+        if (direction.equals("high")) {
+            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 70);
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.postDelayed(() -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255), 50);
+        } else {
+            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 70);
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.postDelayed(() -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 50), 50);
+        }
     }
 }
