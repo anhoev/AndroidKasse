@@ -12,7 +12,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
-import android.graphics.PixelFormat;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -33,9 +32,9 @@ import android.os.Message;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.GestureDetector;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -45,7 +44,6 @@ import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -56,9 +54,7 @@ import com.amazon.android.webkit.AmazonWebKitFactory;
 import com.amazon.android.webkit.AmazonWebSettings;
 import com.amazon.android.webkit.AmazonWebView;
 import com.amazon.android.webkit.AmazonWebViewClient;
-import com.koushikdutta.async.future.FutureCallback;
 import com.koushikdutta.ion.Ion;
-import com.koushikdutta.ion.ProgressCallback;
 
 import java.io.File;
 import java.io.IOException;
@@ -155,6 +151,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     private ActivityManager activityManager;
     private boolean turnOffScreenForce = false;
     private OnUserPresentReceiver onUserPresentReceiver;
+
+    static boolean kindlefire8inch;
 
     public void keepWiFiOn(boolean on) {
         if (wifiLock == null) {
@@ -608,6 +606,12 @@ public class MainActivity extends Activity implements SensorEventListener {
         routerNotWorkingView.setOnClickListener(devListener);
 
         initWifiSetup();
+
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        WindowManager wm = (WindowManager) getApplicationContext().getSystemService(Context.WINDOW_SERVICE); // the results will be higher than using the activity context object or the getWindowManager() shortcut
+        wm.getDefaultDisplay().getMetrics(displayMetrics);
+        int screenWidth = displayMetrics.widthPixels;
+        if (screenWidth == 1280) kindlefire8inch = true;
     }
 
     public void initWifiSetup() {
@@ -1056,14 +1060,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     public static void changeBrightness(String direction) {
+        if (kindlefire8inch) return;
         if (direction.equals("high")) {
-            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 70);
-            Handler handler = new Handler(Looper.getMainLooper());
-            handler.postDelayed(() -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255), 50);
+            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
         } else {
-            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 70);
-            Handler handler = new Handler(Looper.getMainLooper());
-            handler.postDelayed(() -> Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 50), 50);
+            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
         }
     }
 }
