@@ -174,7 +174,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        MainActivity.changeBrightness("high");
+        changeBrightness("high");
 
         if (mainWebView != null) {
             mainWebView = null;
@@ -284,7 +284,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                MainActivity.changeBrightness("high");
+                changeBrightness("high");
                 Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
                 int mPendingIntentId = 123456;
                 PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
@@ -538,7 +538,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 public boolean onDoubleTap(MotionEvent e) {
                     if (screenOn == false) {
                         screenOn = true;
-                        MainActivity.changeBrightness("high");
+                        changeBrightness("high");
                         overlay.setVisibility(View.INVISIBLE);
                         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
                     }
@@ -723,6 +723,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             } else if (turnOffScreenForce) {
                 turnOffScreenForce = false;
             }
+            screenOn = false;
         }
     }
 
@@ -734,7 +735,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 runOnUiThread(() -> {
                     if (screenOn == false) {
                         screenOn = true;
-                        MainActivity.changeBrightness("high");
+                        changeBrightness("high");
                         overlay.setVisibility(View.INVISIBLE);
                     }
                     Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
@@ -782,7 +783,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         playMusic();
 
         turnOffScreenForce = true;
-        MainActivity.changeBrightness("low");
+        changeBrightness("low");
     }
 
     public void stopMusic() {
@@ -812,7 +813,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         public void run() {
             if (screenOn) {
                 screenOn = false;
-                MainActivity.changeBrightness("low");
+                changeBrightness("low");
                 overlay.setVisibility(View.VISIBLE);
             }
 
@@ -825,7 +826,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         public void run() {
             if (screenOn) {
                 screenOn = false;
-                MainActivity.changeBrightness("low");
+                changeBrightness("low");
                 overlay.setVisibility(View.VISIBLE);
             }
 
@@ -997,7 +998,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     public void onStop() {
         super.onStop();
         stopDisconnectTimer();
-        MainActivity.changeBrightness("high");
+        changeBrightness("high");
     }
 
     @Override
@@ -1059,11 +1060,13 @@ public class MainActivity extends Activity implements SensorEventListener {
         startActivity(intent);
     }
 
-    public static void changeBrightness(String direction) {
-        if (kindlefire8inch) return;
+    public void changeBrightness(String direction) {
+        //if (kindlefire8inch) return;
         if (direction.equals("high")) {
+            mainWebView.loadUrl("javascript:screenOn();", null);
             Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
         } else {
+            mainWebView.loadUrl("javascript:screenOff();", null);
             Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
         }
     }
