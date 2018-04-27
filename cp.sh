@@ -1,1 +1,2 @@
-cp /Users/anhtran/IdeaProjects/CrosswalkDemo/app/build/outputs/apk/debug/app-debug.apk ~/Dropbox/Kasse/apk/Kindle/starkasse.apk
+cp /Users/anhtran/IdeaProjects/CrosswalkDemo/app/build/outputs/apk/debug/app-debug.apk ~/Dropbox/Kasse/apk/Kindle/starkasse-tablet.apk
+node /Users/anhtran/IdeaProjects/lieferservice/upload 1.02 /Users/anhtran/Dropbox/Kasse/apk/Kindle/starkasse-tablet.apk starkasse-tablet.zip
