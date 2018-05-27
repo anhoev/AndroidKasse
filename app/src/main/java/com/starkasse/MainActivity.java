@@ -4,9 +4,11 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
+import android.app.Instrumentation;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -30,6 +32,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
@@ -93,9 +96,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     public boolean screenOn = true;
     private OnScreenOffReceiver onScreenOffReceiver;
     public PowerManager.WakeLock wakeLock;
-    private boolean currentFocus;
-    private Handler collapseNotificationHandler;
-    private MediaPlayer mediaPlayer;
 
     @InjectView(R.id.disableAdvertising)
     View disableAdvertisingBtn;
@@ -153,6 +153,9 @@ public class MainActivity extends Activity implements SensorEventListener {
     private OnUserPresentReceiver onUserPresentReceiver;
 
     static boolean kindlefire8inch;
+    private Intent mServiceIntent;
+    private Instrumentation m_Instrumentation;
+    private AudioManager mAudioManager;
 
     public void keepWiFiOn(boolean on) {
         if (wifiLock == null) {
@@ -174,6 +177,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopService(mServiceIntent);
         changeBrightness("high");
 
         if (mainWebView != null) {
@@ -564,12 +568,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         registerKioskModeScreenOffReceiver();
 
         disableAdvertisingBtn.setOnClickListener(v -> {
-            try {
-                Runtime.getRuntime().exec(new String[]{"sh", "-c", "pm clear com.amazon.kindle.kso"});
-                Runtime.getRuntime().exec(new String[]{"sh", "-c", "pm hide com.amazon.kindle.kso"});
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         });
 
         autoReloadInit();
@@ -612,6 +610,11 @@ public class MainActivity extends Activity implements SensorEventListener {
         wm.getDefaultDisplay().getMetrics(displayMetrics);
         int screenWidth = displayMetrics.widthPixels;
         if (screenWidth == 1280) kindlefire8inch = true;
+
+        mServiceIntent = new Intent(this, WakeupService.class);
+        if (!ServiceMan.isMyServiceRunning(WakeupService.class, this)) {
+            startService(mServiceIntent);
+        }
     }
 
     public void initWifiSetup() {
@@ -741,7 +744,6 @@ public class MainActivity extends Activity implements SensorEventListener {
                     Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
                     sleepHandler();
                 });
-                stopMusic();
                 activityManager.moveTaskToFront(getTaskId(), 0);
             }
         }
@@ -786,15 +788,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         changeBrightness("low");
     }
 
-    public void stopMusic() {
-        if (mediaPlayer == null) return;
-        if (mediaPlayer.isPlaying()) {
-            mediaPlayer.pause();
-        }
-    }
-
     public void playMusic() {
-        runOnUiThread(() -> {
+        /*runOnUiThread(() -> {
             if (mediaPlayer == null) {
                 mediaPlayer = MediaPlayer.create(MainActivity.self, R.raw.sound);
                 mediaPlayer.setVolume(0, 0);
@@ -805,7 +800,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (!mediaPlayer.isPlaying()) {
                 mediaPlayer.start();
             }
-        });
+        });*/
     }
 
     private Runnable disconnectCallback2 = new Runnable() {
@@ -1006,8 +1001,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         super.onWindowFocusChanged(hasFocus);
         getWindow().getDecorView().setSystemUiVisibility(uiVisibility);
 
-        currentFocus = hasFocus;
-
         if (!hasFocus) {
             // Method that handles loss of window focus
             preventStatusBarExpansion(10);
@@ -1047,7 +1040,6 @@ public class MainActivity extends Activity implements SensorEventListener {
                                 mainWebView.setVisibility(lastStatus);
                                 installApk();
                             });
-
                         });
             }
         });
@@ -1063,10 +1055,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     public void changeBrightness(String direction) {
         //if (kindlefire8inch) return;
         if (direction.equals("high")) {
-            mainWebView.loadUrl("javascript:screenOn();", null);
+            //mainWebView.loadUrl("javascript:screenOn();", null);
+            overlay.setVisibility(View.INVISIBLE);
             Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
         } else {
-            mainWebView.loadUrl("javascript:screenOff();", null);
+            //mainWebView.loadUrl("javascript:screenOff();", null);
+            overlay.setVisibility(View.VISIBLE);
             Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
         }
     }

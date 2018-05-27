@@ -12,7 +12,7 @@ import android.util.Log;
 public class ServiceMan {
     private static Intent mServiceIntent;
 
-    private static boolean isMyServiceRunning(Class<?> serviceClass, Context c) {
+    public static boolean isMyServiceRunning(Class<?> serviceClass, Context c) {
         ActivityManager manager = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
         for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
             if (serviceClass.getName().equals(service.service.getClassName())) {
