@@ -1,32 +1,32 @@
 package com.starkasse;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.ServiceConnection;
+import android.os.Build;
 import android.os.Handler;
-import android.os.IBinder;
-import android.os.Message;
+import android.support.annotation.RequiresApi;
 import android.util.Base64;
 import android.util.Log;
 
+import com.google.gson.Gson;
 import com.koushikdutta.async.http.body.JSONObjectBody;
-import com.koushikdutta.async.http.server.AsyncHttpServerRequest;
 import com.koushikdutta.async.http.server.AsyncHttpServerResponse;
-import com.koushikdutta.async.http.server.HttpServerRequestCallback;
-
-import net.posprinter.posprinterface.IMyBinder;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.starkasse.MainActivity.server;
 
@@ -36,37 +36,23 @@ import static com.starkasse.MainActivity.server;
 
 public class BluetoothServer {
     BluetoothAdapter bluetoothAdapter;
-    private DeviceReceiver myDevice;
-    public static IMyBinder binder;
-    static boolean firstTime = true;
     public Map<String, BluetoothSocket> socketMap = new HashMap<>();
 
-    final UUID sppUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-
-    public static ServiceConnection conn = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            //Bind successfully
-            binder = (IMyBinder) iBinder;
-            Log.e("binder", "connected");
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-            Log.e("disbinder", "disconnected");
-        }
-    };
     private Context context;
-    public Handler disconnectHandler = new Handler() {
-        public void handleMessage(Message msg) {
-        }
-    };
+    @SuppressLint("HandlerLeak")
+    public Handler disconnectHandler = new Handler();
+
+    public Handler btHandler = new Handler();
+    public Handler btHandler2 = new Handler();
+
+    public Handler connectHandler = new Handler();
 
     public void uninit() {
-        context.unregisterReceiver(myDevice);
     }
 
-    public void init(Context context) {
+    ArrayList<BluetoothPrinter> deviceList_found = new ArrayList<>();
+
+    public void init(final Context context) {
         this.context = context;
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
@@ -75,55 +61,72 @@ public class BluetoothServer {
             BluetoothAdapter.getDefaultAdapter().enable();
         }
 
-        myDevice = new DeviceReceiver();
-
-        //register the receiver
-        IntentFilter filterStart = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-        IntentFilter filterEnd = new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-
-
         try {
-            context.registerReceiver(myDevice, filterStart);
-            context.registerReceiver(myDevice, filterEnd);
+            server.get("/", (request, response) -> response.send("Hello!!!"));
 
-            server.get("/", new HttpServerRequestCallback() {
-                @Override
-                public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                    response.send("Hello!!!");
+            server.get("/searchPrinters", (request, response) -> {
+                disconnectCallback.run();
+
+                if (bluetoothAdapter.isDiscovering()) bluetoothAdapter.cancelDiscovery();
+
+                BluetoothAdapter.LeScanCallback leScanCallback = (device, rssi, scanRecord) -> {
+                    boolean found = false;
+                    for (BluetoothPrinter bluetoothPrinter : deviceList_found) {
+                        if (bluetoothPrinter.address.equals(device.getAddress())) found = true;
+                    }
+                    if (!found) {
+                        deviceList_found.add(new BluetoothPrinter(device.getName(), device.getAddress()));
+                    }
+                };
+
+                bluetoothAdapter.startLeScan(leScanCallback);
+
+                btHandler.postDelayed(() -> {
+                    bluetoothAdapter.stopLeScan(leScanCallback);
+                    response.send(new Gson().toJson(deviceList_found));
+                }, 4000);
+            });
+
+            server.post("/checkPrinterAvailable", (request, response) -> {
+                JSONObject json = ((JSONObjectBody) request.getBody()).get();
+
+                try {
+                    AtomicBoolean finish = new AtomicBoolean(false);
+                    String address = json.getString("address");
+                    disconnectCallback.run();
+                    if (bluetoothAdapter.isDiscovering()) bluetoothAdapter.cancelDiscovery();
+
+                    BluetoothAdapter.LeScanCallback leScanCallback = (device, rssi, scanRecord) -> {
+                        if (finish.get()) return;
+                        if (address.equals(device.getAddress())) {
+                            finish.set(true);
+                            response.send(String.valueOf(rssi));
+                        }
+                    };
+                    bluetoothAdapter.startLeScan(leScanCallback);
+
+                    btHandler2.postDelayed(() -> {
+                        bluetoothAdapter.stopLeScan(leScanCallback);
+                        if (!finish.get()) response.send("0");
+                    }, 4000);
+
+                } catch (JSONException e) {
+                    e.printStackTrace();
                 }
             });
 
-            server.get("/searchPrinters", new HttpServerRequestCallback() {
-                @Override
-                public void onRequest(AsyncHttpServerRequest request, AsyncHttpServerResponse response) {
-                    if (!bluetoothAdapter.isDiscovering()) {
-                        bluetoothAdapter.startDiscovery();
-                    }
+            server.post("/print", (request, response) -> {
+                JSONObject json = ((JSONObjectBody) request.getBody()).get();
+                final String address, base64Bytes;
 
-                    myDevice.setResponse(response);
-                }
-            });
+                try {
+                    address = json.getString("address");
+                    base64Bytes = json.getString("data");
+                    final byte[] data = Base64.decode(base64Bytes, Base64.DEFAULT);
 
-            server.post("/print", new HttpServerRequestCallback() {
-                @Override
-                public void onRequest(AsyncHttpServerRequest request, final AsyncHttpServerResponse response) {
-                    JSONObject json = ((JSONObjectBody) request.getBody()).get();
-                    final String address, base64Bytes;
+                    new Thread(() -> sendData(address, data, response)).start();
 
-                    try {
-                        address = json.getString("address");
-                        base64Bytes = json.getString("data");
-                        final byte[] data = Base64.decode(base64Bytes, Base64.DEFAULT);
-
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                sendData(address, data, response);
-                            }
-                        }).start();
-
-                    } catch (JSONException e) {
-                    }
+                } catch (JSONException e) {
                 }
             });
 
@@ -131,17 +134,14 @@ public class BluetoothServer {
         }
     }
 
-    private Runnable disconnectCallback = new Runnable() {
-        @Override
-        public void run() {
-            try {
-                Log.e("bluetooth", "disconnect !!!");
-                for (Map.Entry<String, BluetoothSocket> pair : socketMap.entrySet()) {
-                    pair.getValue().close();
-                    socketMap.remove(pair.getKey());
-                }
-            } catch (Exception e) {
+    private Runnable disconnectCallback = () -> {
+        try {
+            Log.e("bluetooth", "disconnect !!!");
+            for (Map.Entry<String, BluetoothSocket> pair : socketMap.entrySet()) {
+                pair.getValue().close();
+                socketMap.remove(pair.getKey());
             }
+        } catch (Exception e) {
         }
     };
 
@@ -155,6 +155,7 @@ public class BluetoothServer {
         BluetoothSocket socket = null;
         if (!socketMap.containsKey(address) || !socketMap.get(address).isConnected()) {
             BluetoothDevice device = bluetoothAdapter.getRemoteDevice(address);
+
             try {
                 //socket = device.createInsecureRfcommSocketToServiceRecord(sppUuid);
                 socket = (BluetoothSocket) device.getClass().getMethod("createInsecureRfcommSocket", new Class[]{int.class}).invoke(device, 1);
@@ -165,7 +166,18 @@ public class BluetoothServer {
                 return;
             }
 
-            bluetoothAdapter.cancelDiscovery();
+            //bluetoothAdapter.cancelDiscovery();
+
+            BluetoothSocket finalSocket = socket;
+            connectHandler.postDelayed(() -> {
+                if (!finalSocket.isConnected()) {
+                    try {
+                        finalSocket.close();
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+            }, 15000);
 
             try {
                 socket.connect();
@@ -178,6 +190,9 @@ public class BluetoothServer {
                         e1.printStackTrace();
                     }
                 }
+
+                //bluetoothAdapter.disable();
+                //bluetoothAdapter.enable();
 
                 Log.d("bluetooth", "reject");
                 res.send("false");

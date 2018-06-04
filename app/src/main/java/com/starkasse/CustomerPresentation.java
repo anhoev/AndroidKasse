@@ -53,17 +53,13 @@ public class CustomerPresentation extends Presentation {
             @SuppressWarnings("deprecation")
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                new android.os.Handler().postDelayed(
-                        new Runnable() {
-                            public void run() {
-                                if (mainActivity.secondaryDeviceActive) {
-                                    webview.loadUrl("http://" + mainActivity.ipAddressForSecondaryDevice + ":8888/customerdisplay?secondaryDevice");
-                                } else {
-                                    webview.loadUrl("http://localhost:8888/customerdisplay");
-                                }
-                            }
-                        },
-                        5000);
+                new android.os.Handler().postDelayed(() -> {
+                    if (mainActivity.secondaryDeviceActive) {
+                        webview.loadUrl("http://" + mainActivity.ipAddressForSecondaryDevice + ":8888/customerdisplay?secondaryDevice");
+                    } else {
+                        webview.loadUrl("http://localhost:8888/customerdisplay");
+                    }
+                }, 5000);
             }
 
             @TargetApi(android.os.Build.VERSION_CODES.M)

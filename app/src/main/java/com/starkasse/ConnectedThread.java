@@ -96,6 +96,8 @@ public class ConnectedThread extends Thread {
                     this.cancel();
                 }
             }, 6000, 6000);
+
+
         } catch (Exception e) {
             _continue = false;
             try {
