@@ -37,9 +37,7 @@ public class WifiUtils {
                     // STATIC IP AND MASK PREFIX
                     Constructor<?> laConstructor = null;
                     laConstructor = LinkAddress.class.getConstructor(InetAddress.class, int.class);
-                    LinkAddress linkAddress = (LinkAddress) laConstructor.newInstance(
-                            InetAddress.getByName(ip),
-                            prefix);
+                    LinkAddress linkAddress = (LinkAddress) laConstructor.newInstance(InetAddress.getByName(ip), 24);
                     staticConf.getClass().getField("ipAddress").set(staticConf, linkAddress);
                     // GATEWAY
                     staticConf.getClass().getField("gateway").set(staticConf, InetAddress.getByName(gateway));

@@ -35,6 +35,7 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.text.format.Formatter;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.GestureDetector;
@@ -252,63 +253,26 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     }
 
-    Callable onResumeCb = new Callable() {
-        @Override
-        public Object call() throws Exception {
-            runOnUiThread(new Runnable() {
-                boolean first = false;
-
-                @Override
-                public void run() {
-                    if (!first) {
-                        first = true;
-
-                        new android.os.Handler().postDelayed(
-                                new Runnable() {
-                                    public void run() {
-                                        try {
-                                            mainWebView.loadUrl("javascript:onResume();", null);
-                                            Toast.makeText(getApplicationContext(), "onResume", Toast.LENGTH_SHORT).show();
-                                        } catch (Exception e) {
-                                        }
-                                    }
-                                },
-                                500);
-
-                    }
-                }
-            });
-
-            return null;
-        }
-    };
-
     public void restart() {
         Log.v("RESTART", "RESTART");
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                changeBrightness("high");
-                Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
-                int mPendingIntentId = 123456;
-                PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
-                AlarmManager mgr = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
-                mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent);
-                System.exit(0);
-            }
+        runOnUiThread(() -> {
+            changeBrightness("high");
+            Intent mStartActivity = new Intent(getApplicationContext(), MainActivity.class);
+            int mPendingIntentId = 123456;
+            PendingIntent mPendingIntent = PendingIntent.getActivity(getApplicationContext(), mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
+            AlarmManager mgr = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+            mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent);
+            System.exit(0);
         });
     }
 
     public void devMode() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mainWebView.setVisibility(View.INVISIBLE);
-                loadingView.setVisibility(View.INVISIBLE);
-                serverNotOnlineView.setVisibility(View.INVISIBLE);
-                routerNotWorkingView.setVisibility(View.INVISIBLE);
-                devView.setVisibility(View.VISIBLE);
-            }
+        runOnUiThread(() -> {
+            mainWebView.setVisibility(View.INVISIBLE);
+            loadingView.setVisibility(View.INVISIBLE);
+            serverNotOnlineView.setVisibility(View.INVISIBLE);
+            routerNotWorkingView.setVisibility(View.INVISIBLE);
+            devView.setVisibility(View.VISIBLE);
         });
     }
 
@@ -333,6 +297,8 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         @JavascriptInterface
         public float getBrightness() {
+            if (sharedPref.getInt("currentBrightness", -1) != -1)
+                return sharedPref.getInt("currentBrightness", -1);
             try {
                 return Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
             } catch (Settings.SettingNotFoundException e) {
@@ -348,6 +314,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         @JavascriptInterface
         public void setBrightness(int brightness) {
+            sharedPref.edit().putInt("currentBrightness", brightness).apply();
             Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, brightness);
         }
 
@@ -449,6 +416,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         factory.initializeWebView(mainWebView, 0xFFFFFF, false, null);
         AmazonWebSettings webSettings = mainWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
+        mainWebView.clearCache(true);
 
         final JsInterface jsInterface = new JsInterface(this);
         mainWebView.addJavascriptInterface(jsInterface, "Android");
@@ -624,10 +592,10 @@ public class MainActivity extends Activity implements SensorEventListener {
         defaultGatewayEdittext.setText(sharedPref.getString("defaultGateway", ""));
 
         setWifiBtn.setOnClickListener(v -> {
-            sharedPref.edit().putString("wifiName", wifiNameEdittext.getText().toString()).commit();
-            sharedPref.edit().putString("wifiPassword", wifiPasswordEdittext.getText().toString()).commit();
-            sharedPref.edit().putString("staticIp", staticIpEdittext.getText().toString()).commit();
-            sharedPref.edit().putString("defaultGateway", defaultGatewayEdittext.getText().toString()).commit();
+            sharedPref.edit().putString("wifiName", wifiNameEdittext.getText().toString()).apply();
+            sharedPref.edit().putString("wifiPassword", wifiPasswordEdittext.getText().toString()).apply();
+            sharedPref.edit().putString("staticIp", staticIpEdittext.getText().toString()).apply();
+            sharedPref.edit().putString("defaultGateway", defaultGatewayEdittext.getText().toString()).apply();
         });
 
         anzahlWifiClick = 0;
@@ -651,7 +619,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         conf.preSharedKey = "\"" + sharedPref.getString("wifiPassword", "") + "\"";
 
         try {
-            WifiUtils.changeWifiConfiguration(conf, false, sharedPref.getString("staticIp", ""), 0, "8.8.8.8", sharedPref.getString("defaultGateway", ""));
+            WifiUtils.changeWifiConfiguration(conf, false, sharedPref.getString("staticIp", ""), 24, "8.8.8.8", sharedPref.getString("defaultGateway", ""));
             wifiManager.addNetwork(conf); //apply the setting
             wifiManager.saveConfiguration(); //Save it
         } catch (Exception e) {
@@ -678,7 +646,8 @@ public class MainActivity extends Activity implements SensorEventListener {
                     () -> checkNetworkAndLoad(),
                     8000);
         } else {
-            if (!("\"" + sharedPref.getString("wifiName", "") + "\"").equals(wifiManager.getConnectionInfo().getSSID())) {
+            if (!("\"" + sharedPref.getString("wifiName", "") + "\"").equals(wifiManager.getConnectionInfo().getSSID())
+                    || !(sharedPref.getString("staticIp", "")).equals(Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress()))) {
                 forceWifi();
                 routerNotWorkingView.setVisibility(View.VISIBLE);
                 new android.os.Handler().postDelayed(
@@ -771,15 +740,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         registerReceiver(onUserPresentReceiver, filter2);
     }
 
-    public Handler disconnectHandler = new Handler() {
-        public void handleMessage(Message msg) {
-        }
-    };
-
-    public Handler disconnectHandler2 = new Handler() {
-        public void handleMessage(Message msg) {
-        }
-    };
+    public Handler disconnectHandler = new Handler();
+    public Handler disconnectHandler2 = new Handler();
 
     public void turnOffScreen() {
         playMusic();
@@ -870,7 +832,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         autoReload = (CheckBox) findViewById(R.id.autoReload);
         autoReload.setChecked(autoReloadValue);
         autoReload.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            sharedPref.edit().putBoolean("autoReload", isChecked).commit();
+            sharedPref.edit().putBoolean("autoReload", isChecked).apply();
             autoReloadValue = isChecked;
         });
     }
@@ -1057,7 +1019,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         if (direction.equals("high")) {
             //mainWebView.loadUrl("javascript:screenOn();", null);
             overlay.setVisibility(View.INVISIBLE);
-            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 255);
+            Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, sharedPref.getInt("currentBrightness", 255));
         } else {
             //mainWebView.loadUrl("javascript:screenOff();", null);
             overlay.setVisibility(View.VISIBLE);
