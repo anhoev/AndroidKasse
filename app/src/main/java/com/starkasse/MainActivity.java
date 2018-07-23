@@ -216,9 +216,9 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (!ready) return;
             int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 0);
 
-            if (level <= 5) {
+            if (level <= 1) {
                 mainWebView.loadUrl("javascript:onBatteryLow && onBatteryLow();", null);
-            } else if (level > 20) {
+            } else if (level > 5) {
                 mainWebView.loadUrl("javascript:onBatteryEnough && onBatteryEnough();", null);
             }
         }
@@ -579,10 +579,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         int screenWidth = displayMetrics.widthPixels;
         if (screenWidth == 1280) kindlefire8inch = true;
 
-        mServiceIntent = new Intent(this, WakeupService.class);
-        if (!ServiceMan.isMyServiceRunning(WakeupService.class, this)) {
-            startService(mServiceIntent);
-        }
+        //mServiceIntent = new Intent(this, WakeupService.class);
+        //if (!ServiceMan.isMyServiceRunning(WakeupService.class, this)) startService(mServiceIntent);
     }
 
     public void initWifiSetup() {
@@ -687,6 +685,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (!Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
+            try {
+                int brightness = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
+                if (sharedPref.getInt("currentBrightness", -1) != brightness && brightness > 100) {
+                    sharedPref.edit().putInt("currentBrightness", brightness).apply();
+                }
+            } catch (Exception e) {
+            }
+
             resetDisconnectTimer();
             if (!isPlugged(getApplicationContext()) && !turnOffScreenForce) {
                 playMusic();
@@ -955,7 +961,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     public void onStop() {
         super.onStop();
         stopDisconnectTimer();
-        changeBrightness("high");
     }
 
     @Override
@@ -1021,6 +1026,13 @@ public class MainActivity extends Activity implements SensorEventListener {
             overlay.setVisibility(View.INVISIBLE);
             Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, sharedPref.getInt("currentBrightness", 255));
         } else {
+            try {
+                int brightness = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
+                if (sharedPref.getInt("currentBrightness", -1) != brightness && brightness > 100) {
+                    sharedPref.edit().putInt("currentBrightness", brightness).apply();
+                }
+            } catch (Exception e) {
+            }
             //mainWebView.loadUrl("javascript:screenOff();", null);
             overlay.setVisibility(View.VISIBLE);
             Settings.System.putInt(MainActivity.self.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 0);
