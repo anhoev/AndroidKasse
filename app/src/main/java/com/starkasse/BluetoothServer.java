@@ -52,13 +52,15 @@ public class BluetoothServer {
 
     ArrayList<BluetoothPrinter> deviceList_found = new ArrayList<>();
 
-    public void init(final Context context) {
+    public void init(final Context context, boolean autoEnable) {
         this.context = context;
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
-        if (!bluetoothAdapter.isEnabled()) {
+        if (!bluetoothAdapter.isEnabled() && autoEnable) {
             //open bluetooth
             BluetoothAdapter.getDefaultAdapter().enable();
+        } else if (bluetoothAdapter.isEnabled()) {
+            BluetoothAdapter.getDefaultAdapter().disable();
         }
 
         try {

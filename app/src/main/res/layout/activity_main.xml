@@ -90,7 +90,14 @@
                     android:layout_height="wrap_content"
                     android:layout_marginRight="20dp"
                     android:text="Wifi Direct"
-                    android:key="autoStartWifiDirect"
+                    android:textColor="@android:color/white" />
+
+                <CheckBox
+                    android:id="@+id/customerdisplayEnable"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="20dp"
+                    android:text="customerdisplay"
                     android:textColor="@android:color/white" />
 
             </LinearLayout>
@@ -149,6 +156,12 @@
                     android:layout_height="wrap_content"
                     android:text="chmod" />
 
+                <Button
+                    android:id="@+id/reboot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="reboot" />
+
             </LinearLayout>
 
             <LinearLayout
@@ -158,42 +171,49 @@
                 android:orientation="horizontal">
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/startMongo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Start mongo" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/startNode"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Start nodejs" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/stopMongo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Stop mongo" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/stopNode"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Stop nodejs" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/repairMongo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Repair Mongo" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/downloadDataFromSmb"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Download Data" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/reinstallApk"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -206,6 +226,12 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="50dp"
                 android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/startQuicksupport"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quicksupport" />
 
                 <Button
                     android:id="@+id/disableSystemUi"
@@ -226,6 +252,7 @@
                     android:background="@android:color/white" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/copyFromUsb"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -238,6 +265,7 @@
                     android:text="Deploy" />
 
                 <Button
+                    android:visibility="gone"
                     android:id="@+id/deployScript2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

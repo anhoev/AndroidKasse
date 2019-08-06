@@ -6,7 +6,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
     compileSdkVersion 25
-    buildToolsVersion '27.0.3'
+    buildToolsVersion '28.0.3'
 
     defaultConfig {
         applicationId "com.starkasse.kasse"
@@ -14,6 +14,7 @@ android {
         targetSdkVersion 25
         versionCode 2
         versionName "1.0"
+        multiDexEnabled true
 
 //        // Only build for armeabi-v7a.  (Removes x86)
 //        ndk {
@@ -62,16 +63,18 @@ repositories {
 
 
 dependencies {
-    compile fileTree(include: ['*.jar'], dir: 'libs')
-    compile 'com.android.support:appcompat-v7:25.0.0'
-    compile 'com.hierynomus:smbj:0.5.1'
-    compile 'org.xwalk:xwalk_core_library:23.53.589.4'
-    compile files('libs/posprinterconnectandsendsdk.jar')
-    compile 'com.koushikdutta.async:androidasync:2.+'
-    compile 'com.google.code.gson:gson:2.7'
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:25.0.0'
+    implementation 'com.hierynomus:smbj:0.5.1'
+    implementation 'org.xwalk:xwalk_core_library:23.53.589.4'
+    implementation files('libs/posprinterconnectandsendsdk.jar')
+    implementation 'com.koushikdutta.async:androidasync:2.+'
+    implementation 'com.google.code.gson:gson:2.7'
     annotationProcessor 'com.jakewharton:butterknife:6.1.0'
-    compile 'com.jakewharton:butterknife:6.1.0'
-    compile project(':ScreenSharingSDK')
-    compile 'commons-io:commons-io:2.6'
+    implementation 'com.jakewharton:butterknife:6.1.0'
+    implementation project(':ScreenSharingSDK')
+    implementation 'commons-io:commons-io:2.6'
     implementation files('libs/posindev.jar')
+    implementation 'com.squareup.okhttp3:okhttp:3.10.0'
+    implementation 'com.android.support:multidex:1.0.0'
 }

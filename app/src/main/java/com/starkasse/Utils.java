@@ -1,15 +1,10 @@
 package com.starkasse;
 
-import android.Manifest;
-import android.annotation.TargetApi;
 import android.graphics.Color;
-import android.net.wifi.WifiConfiguration;
 import android.os.Build;
 import android.os.Environment;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
-import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -38,11 +33,11 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
-import static org.chromium.base.ThreadUtils.postOnUiThreadDelayed;
 import static org.chromium.base.ThreadUtils.runOnUiThread;
 
 /**
@@ -244,21 +239,11 @@ public class Utils {
         runOnUiThread(() -> context.copyFromUsbBtn.setBackgroundColor(Color.RED));
         new android.os.Handler().postDelayed(
                 () -> {
-                    try {
-                        Process cp1 = Runtime.getRuntime().exec(new String[]{"su", "-c", "cp -R " + path + "/starkasse " + context.getApplicationInfo().dataDir + "/"});
-                        cp1.waitFor();
-                        Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod -R 777 " + context.getApplicationInfo().dataDir + "/starkasse"});
-                        Process cp2 = Runtime.getRuntime().exec(new String[]{"su", "-c", "cp -R " + path + "/data " + Environment.getExternalStorageDirectory().getPath() + "/"});
-                        cp2.waitFor();
-                        Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod -R 777 " + Environment.getExternalStorageDirectory().getPath() + "/data"});
-                        runOnUiThread(() -> context.copyFromUsbBtn.setBackgroundColor(Color.WHITE));
-                        /*FileUtils.copyDirectory(new File(path + "/starkasse"), new File(context.getApplicationInfo().dataDir + "/starkasse/"));
-                        File destDir2 = new File(Environment.getExternalStorageDirectory().getPath() + "/data");
-                        FileUtils.copyDirectory(new File(path + "/data"), destDir2);*/
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    shell("cp -R " + path + "/starkasse " + context.getApplicationInfo().dataDir + "/");
+                    shell("chmod -R 777 " + context.getApplicationInfo().dataDir + "/starkasse");
+                    shell("cp -R " + path + "/data " + Environment.getExternalStorageDirectory().getPath() + "/");
+                    shell("chmod -R 777 " + Environment.getExternalStorageDirectory().getPath() + "/data");
+                    runOnUiThread(() -> context.copyFromUsbBtn.setBackgroundColor(Color.WHITE));
                 },
                 500);
 
@@ -270,7 +255,7 @@ public class Utils {
         new android.os.Handler().postDelayed(
                 () -> new Thread(() -> {
                     try {
-                        Process cpDeploy = Runtime.getRuntime().exec(new String[]{"su", "-c", "cd " + path + "/deploy && sh deploy.sh"});
+                        Process cpDeploy = shellSpawn("cd " + path + "/deploy && sh deploy.sh", null);
                         new Thread(() -> {
                             BufferedReader input = new BufferedReader(new InputStreamReader(cpDeploy.getInputStream()));
                             String line;
@@ -297,11 +282,7 @@ public class Utils {
 
     public void runDeployScript2(String path) {
         //pm install -r /sdcard/starkasse-main.apk
-        try {
-            Runtime.getRuntime().exec(new String[]{"su", "-c", "sh " + path + "/deploy/deploy2.sh"});
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        shellSpawn("cd " + path + "/deploy && sh deploy2.sh", null);
     }
 
     public String getUsbPath() {
@@ -324,9 +305,12 @@ public class Utils {
                 if (line.contains("asec"))
                     continue;
 
-                if (line.contains("fat")) {// TF card
+                if (line.contains("fat") || line.contains("vfat")) {// TF card
                     String columns[] = line.split(" ");
                     if (columns != null && columns.length > 1) {
+                        //for (String column : columns)
+                        //    if (column.contains("/mnt")) mount = mount.concat(column);
+
                         mount = mount.concat(columns[1]);
 
                         patharray[i] = mount;
@@ -435,13 +419,37 @@ public class Utils {
         return environment;
     }
 
-    public void stopMongo() {
+    static public Process shellSpawn(String cmd, String[] env) {
+        Process p = null;
         try {
-            Runtime.getRuntime().exec(new String[]{"su", "-c", "pkill mongod"});
-        } catch (IOException e) {
+            p = Runtime.getRuntime().exec(EnvUtils.isRooted() ? "su" : "sh", env);
+            DataOutputStream dos = new DataOutputStream(p.getOutputStream());
+            dos.writeBytes(String.format("%s\n", cmd));
+            dos.flush();
+            dos.close();
+        } catch (Exception e) {
             e.printStackTrace();
         }
+        return p;
+    }
 
+    static public void shell(String cmd) {
+        Process p = null;
+        try {
+            p = Runtime.getRuntime().exec(EnvUtils.isRooted() ? "su" : "sh");
+            DataOutputStream dos = new DataOutputStream(p.getOutputStream());
+            dos.writeBytes(String.format("%s\n", cmd));
+            dos.writeBytes("exit\n");
+            dos.flush();
+            dos.close();
+            p.waitFor();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void stopMongo() {
+        shell("pkill mongod");
         managerProcess.kill(new File(context.getApplicationInfo().dataDir + "/starkasse/mongod"));
         if (context.processMongo != null) context.processMongo.destroy();
 
@@ -453,35 +461,41 @@ public class Utils {
     }
 
     public void startNodejs() {
+        for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
+            Log.d("node", ste.toString());
+        }
+
         final List<String> environment = getEnv();
         environment.add("FONTCONFIG_PATH=" + context.getApplicationInfo().dataDir + "/starkasse/fonts");
-
         try {
             if (EnvUtils.isRooted()) {
-                context.processNode = Runtime.getRuntime().exec(new String[]{"su", "-c", context.getApplicationInfo().dataDir + "/starkasse/index"},
-                        environment.toArray(new String[environment.size()])
-                );
-
-                /*Process p = Runtime.getRuntime().exec("su");
-                DataOutputStream dos = new DataOutputStream(p.getOutputStream());
-                dos.writeBytes("cd " + context.getApplicationInfo().dataDir + "/starkasse/update\n");
-                dos.writeBytes("./index\n");
-                dos.flush();*/
-
+                Log.d("node", "start from apk !!!");
+                shell("pm grant com.starkasse.kasse android.permission.ACCESS_FINE_LOCATION");
+                shell("pm grant com.starkasse.kasse android.permission.ACCESS_COARSE_LOCATION");
+                context.processNode = shellSpawn(context.getApplicationInfo().dataDir + "/starkasse/index", environment.toArray(new String[environment.size()]));
             } else {
-                context.processNode = Runtime.getRuntime().exec(
-                        new String[]{context.getApplicationInfo().dataDir + "/starkasse/index"},
-                        environment.toArray(new String[environment.size()])
+                Log.d("node", "start from apk without root!!!");
+                context.processNode = Runtime.getRuntime().exec(new String[]{context.getApplicationInfo().dataDir + "/starkasse/index"}, environment.toArray(new String[environment.size()])
                 );
             }
-
 
             new Thread(() -> {
                 BufferedReader input = new BufferedReader(new InputStreamReader(context.processNode.getInputStream()));
                 String line;
                 try {
                     while ((line = input.readLine()) != null) {
-                        Log.d("mongo", line);
+                        Log.d("node", line);
+                    }
+                } catch (IOException e) {
+                }
+            }).start();
+
+            new Thread(() -> {
+                BufferedReader input2 = new BufferedReader(new InputStreamReader(context.processNode.getErrorStream()));
+                String line;
+                try {
+                    while ((line = input2.readLine()) != null) {
+                        Log.d("node_err", line);
                     }
                 } catch (IOException e) {
                 }
@@ -492,40 +506,40 @@ public class Utils {
     }
 
     public void stopNode() {
-        try {
-            Runtime.getRuntime().exec(new String[]{"su", "-c", "pkill index"});
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         if (context.processNode == null) return;
         try {
             context.processNode.destroy();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ignored) {
         }
-        managerProcess.kill(new File(context.getApplicationInfo().dataDir + "/starkasse/index"));
+        try {
+            managerProcess.kill(new File(context.getApplicationInfo().dataDir + "/starkasse/index"));
+            managerProcess.kill(new File(context.getApplicationInfo().dataDir + "/starkasse/update/index"));
+        } catch (Exception ignored) {
+        }
+    }
+
+    public String getArg1() {
+        String arg1 = "-c";
+        if (!(new File("/system/xbin/su").exists())) arg1 = "root";
+        return arg1;
     }
 
     void startProgram() {
+        Log.d("node", "startProgram");
         context.showLoading();
         //EnvUtils.cli(MainActivity.this, "-p linux start", "-m");
-        String s = EnvUtils.isRooted() ? "su" : "sh";
-        final List<String> environment = getEnv();
-        try {
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/index"}, environment.toArray(new String[environment.size()]));
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/out.log"}, environment.toArray(new String[environment.size()]));
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/version.json"}, environment.toArray(new String[environment.size()]));
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/phantomjs"}, environment.toArray(new String[environment.size()]));
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/mongod"}, environment.toArray(new String[environment.size()]));
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/update/index"}, environment.toArray(new String[environment.size()]));
-            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/update/blkid"}, environment.toArray(new String[environment.size()]));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        stopMongo();
-        stopNode();
-        startNodejs();
 
+        shell("chmod -R 777 " + context.getApplicationInfo().dataDir);
+        shell("chmod -R 777 " + context.getApplicationInfo().dataDir + "/starkasse");
+
+        stopNode();
+        if (new File("/sdcard").exists()) {
+            startNodejs();
+        } else {
+            Log.d("node", "sdcard doesn't exists");
+            startNodejs();
+            //MainActivity.reboot();
+            //(new Handler()).postDelayed(this::startNodejs, 6000);
+        }
     }
 }

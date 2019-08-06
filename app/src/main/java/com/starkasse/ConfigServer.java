@@ -1,6 +1,7 @@
 package com.starkasse;
 
 import android.content.Context;
+import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
@@ -8,28 +9,24 @@ import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 
 import com.google.gson.Gson;
 import com.koushikdutta.async.http.body.JSONObjectBody;
 import com.koushikdutta.async.http.server.AsyncHttpServer;
-import com.koushikdutta.async.http.server.AsyncHttpServerRequest;
-import com.koushikdutta.async.http.server.AsyncHttpServerResponse;
-import com.koushikdutta.async.http.server.HttpServerRequestCallback;
-import com.posin.device.CustomerDisplay;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.w3c.dom.Text;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.List;
-import java.util.function.Consumer;
 
 import static com.starkasse.MainActivity.presentation;
 import static com.starkasse.MainActivity.wifiManager;
+import static com.starkasse.Utils.shell;
 import static org.chromium.base.ThreadUtils.runOnUiThread;
 
 /**
@@ -46,24 +43,19 @@ public class ConfigServer {
         server.get("/updateAndRestartNode", (request, response) -> {
             runOnUiThread((Runnable) () -> new Handler().postDelayed(
                     () -> {
-                        Log.d("server", "updateAndRestartNode");
+                        Log.d("node", "updateAndRestartNode");
 
                         context.utils.stopNode();
-                        String s = EnvUtils.isRooted() ? "su" : "sh";
-                        try {
-                            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/index"});
-                            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/version.json"});
-                            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/phantomjs"});
-                            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/mongod"});
-                            Runtime.getRuntime().exec(new String[]{s, "-c", "chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/update/index"});
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+                        shell("chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/index");
+                        shell("chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/version.json");
+                        shell("chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/phantomjs");
+                        shell("chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/mongod");
+                        shell("chmod 777 " + context.getApplicationInfo().dataDir + "/starkasse/update/index");
 
                         if (new File("/sdcard/starkasse-main.apk").exists()) {
                             context.installApk();
                         } else {
-                            context.utils.startNodejs();
+                            (new Handler()).postDelayed(context.utils::startNodejs, 500);
                         }
                     },
                     5000));
@@ -72,10 +64,12 @@ public class ConfigServer {
         });
 
         server.get("/wifiList", (request, response) -> {
+
             if (wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED)
                 wifiManager.setWifiEnabled(true);
 
             wifiManager.startScan();
+
 
             List<ScanResult> results = wifiManager.getScanResults();
             final WifiInfo connectionInfo = wifiManager.getConnectionInfo();
@@ -114,6 +108,17 @@ public class ConfigServer {
             }
         });
 
+        server.get("/disableWifi", (request, response) -> {
+            wifiManager.disconnect();
+            response.send("ok");
+        });
+
+        server.get("/enableWifi", (request, response) -> {
+            wifiManager.enableNetwork(wifiManager.getConfiguredNetworks().get(0).networkId, true);
+            wifiManager.reconnect();
+            response.send("ok");
+        });
+
         server.post("/connectToAp", (request, response) -> {
             JSONObject json = ((JSONObjectBody) request.getBody()).get();
 
@@ -125,26 +130,36 @@ public class ConfigServer {
 
                 List<WifiConfiguration> list = wifiManager.getConfiguredNetworks();
                 for (WifiConfiguration i : list) {
-                    wifiManager.removeNetwork(i.networkId);
+                    if (i.SSID.equals("\"" + ssid + "\"")) wifiManager.removeNetwork(i.networkId);
                     wifiManager.saveConfiguration();
                 }
 
                 WifiConfiguration conf = new WifiConfiguration();
                 conf.SSID = "\"" + ssid + "\"";
-                conf.preSharedKey = "\"" + password + "\"";
-                wifiManager.addNetwork(conf);
-
-                List<WifiConfiguration> list2 = wifiManager.getConfiguredNetworks();
-                for (WifiConfiguration i : list2) {
-                    if (i.SSID != null && i.SSID.equals("\"" + ssid + "\"")) {
-                        wifiManager.disconnect();
-                        wifiManager.enableNetwork(i.networkId, true);
-                        wifiManager.reconnect();
-
-                        break;
-                    }
+                if (!TextUtils.isEmpty(password)) {
+                    conf.preSharedKey = "\"" + password + "\"";
+                } else {
+                    conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
                 }
 
+                int id = wifiManager.addNetwork(conf);
+
+                wifiManager.disconnect();
+                wifiManager.enableNetwork(id, true);
+                wifiManager.reconnect();
+
+            } catch (JSONException e) {
+            }
+
+            response.send("OK");
+        });
+
+        server.post("/writeToDsp", (request, response) -> {
+            JSONObject json = ((JSONObjectBody) request.getBody()).get();
+
+            try {
+                String text = json.getString("text");
+                context.dsp.write(text);
             } catch (JSONException e) {
             }
 

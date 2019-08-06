@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Configuration;
 import android.media.MediaRouter;
 import android.net.Uri;
 import android.net.wifi.WifiConfiguration;
@@ -26,6 +27,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Display;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.ValueCallback;
@@ -53,13 +55,17 @@ import org.xwalk.core.XWalkView;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
+
+import static com.starkasse.Utils.shell;
 
 
 public class MainActivity extends XWalkActivity {
@@ -101,6 +107,9 @@ public class MainActivity extends XWalkActivity {
 
     @InjectView(R.id.startMongo)
     Button startMongoBtn;
+
+    @InjectView(R.id.startQuicksupport)
+    Button startQuicksupportBtn;
 
     @InjectView(R.id.startNode)
     Button startNodeBtn;
@@ -159,6 +168,12 @@ public class MainActivity extends XWalkActivity {
     @InjectView(R.id.deployScript2)
     Button deployScript2Btn;
 
+    @InjectView(R.id.autoStartWifiDirect)
+    CheckBox autoStartWifiDirectCheckbox;
+
+    @InjectView(R.id.customerdisplayEnable)
+    CheckBox customerdisplayEnableCheckbox;
+
     static CustomerPresentation presentation;
     private BluetoothServer bluetoothServer;
     static WifiManager wifiManager;
@@ -181,9 +196,10 @@ public class MainActivity extends XWalkActivity {
     private boolean APrunning;
     private Process logcat;
     private int disconnectTimes;
-    private CustomerDisplay dsp;
+    public CustomerDisplay dsp;
     private int clickNumber;
     private CashDrawer cashDrawer;
+    private int backPressedTime;
 
     void showLoading() {
         xWalkWebView.setVisibility(View.INVISIBLE);
@@ -203,11 +219,29 @@ public class MainActivity extends XWalkActivity {
         server.stop();
         stop();
         restart();
+        utils.stopNode();
+    }
+
+    @Override
+    public void onBackPressed() {
+        Log.d("Starkasse apk", "onBackPressed Called: Do nothing !!!");
+        backPressedTime++;
+        if (backPressedTime > 7) {
+            //super.onBackPressed();
+            runOnUiThread(() -> {
+                MainActivity.this.xWalkWebView.setVisibility(View.INVISIBLE);
+                hideLoading();
+            });
+            new Handler().postDelayed(() -> {
+                backPressedTime = 0;
+            }, 1000 * 60);
+        }
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.d("node", "onCreate");
 
         ConfigServer.configServer(server, this);
         server.listen(5000);
@@ -216,8 +250,7 @@ public class MainActivity extends XWalkActivity {
 
         if (sharedPref.getBoolean("NotFirstTime", true)) {
             //EnvUtils.updateEnv(this);
-
-            sharedPref.edit().putBoolean("NotFirstTime", false).commit();
+            sharedPref.edit().putBoolean("NotFirstTime", false).apply();
         }
 
         setContentView(R.layout.activity_main);
@@ -238,6 +271,7 @@ public class MainActivity extends XWalkActivity {
 
         XWalkPreferences.setValue(XWalkPreferences.REMOTE_DEBUGGING, true);
 
+
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().getDecorView().setSystemUiVisibility(uiVisibility);
 
@@ -256,21 +290,19 @@ public class MainActivity extends XWalkActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         reloadButton.setOnClickListener(v -> startWebview());
-
-        bluetoothServer = new BluetoothServer();
-        bluetoothServer.init(this);
-
-
         //customerdisplay
 
-        MediaRouter mediaRouter = (MediaRouter) this.getSystemService(Context.MEDIA_ROUTER_SERVICE);
-        MediaRouter.RouteInfo route = mediaRouter.getSelectedRoute(0);
-        if (route != null) {
-            Display presentationDisplay = route.getPresentationDisplay();
-            if (presentationDisplay != null) {
-                presentation = new CustomerPresentation(this, presentationDisplay);
+        if (sharedPref.getBoolean("customerdisplayEnable", false)) {
+            MediaRouter mediaRouter = (MediaRouter) this.getSystemService(Context.MEDIA_ROUTER_SERVICE);
+            MediaRouter.RouteInfo route = mediaRouter.getSelectedRoute(0);
+            if (route != null) {
+                Display presentationDisplay = route.getPresentationDisplay();
+                if (presentationDisplay != null) {
+                    presentation = new CustomerPresentation(this, presentationDisplay);
+                }
             }
         }
+        customerdisplayEnableCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> sharedPref.edit().putBoolean("customerdisplayEnable", isChecked).apply());
 
         //server
 
@@ -309,20 +341,10 @@ public class MainActivity extends XWalkActivity {
         });
 
         wifiDebugBtn.setOnClickListener(v -> {
-            try {
-                Runtime.getRuntime().exec(new String[]{"su", "-c", "setprop persist.adb.tcp.port 5555"});
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            shell("setprop persist.adb.tcp.port 9555");
         });
 
-        wifiDebugDeactiveBtn.setOnClickListener(v -> {
-            try {
-                Runtime.getRuntime().exec(new String[]{"su", "-c", "setprop persist.adb.tcp.port \"\""});
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
+        wifiDebugDeactiveBtn.setOnClickListener(v -> shell("setprop persist.adb.tcp.port \"\""));
 
         disableSystemUiButton.setOnClickListener(v -> setSystemUIEnabled(false));
 
@@ -343,15 +365,20 @@ public class MainActivity extends XWalkActivity {
 
         startMongoBtn.setOnClickListener(v -> utils.startMongo());
 
-        startNodeBtn.setOnClickListener(v -> utils.startNodejs());
+        startQuicksupportBtn.setOnClickListener(v -> {
+            shell("am start -n com.teamviewer.quicksupport.market/com.teamviewer.quicksupport.ui.QSActivity");
+        });
+
+        startNodeBtn.setOnClickListener(v -> {
+            Log.d("node", "start by click btn");
+            utils.startNodejs();
+        });
 
         stopMongoBtn.setOnClickListener(v -> utils.stopMongo());
 
         stopNodeBtn.setOnClickListener(v -> utils.stopNode());
 
-        chmodBtn.setOnClickListener(v -> {
-            setPreferredHomeActivity(this);
-        });
+        chmodBtn.setOnClickListener(v -> setPreferredHomeActivity(this));
 
         downloadIndexFromSmbBtn.setOnClickListener(v -> new Thread(() -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
@@ -381,6 +408,7 @@ public class MainActivity extends XWalkActivity {
         deployScriptBtn.setOnClickListener(v -> utils.runDeployScript(usbPathInput.getText().toString()));
         deployScript2Btn.setOnClickListener(v -> utils.runDeployScript2(usbPathInput.getText().toString()));
 
+        findViewById(R.id.reboot).setOnClickListener(v -> reboot());
         findViewById(R.id.hideBtns).setVisibility(View.GONE);
         continueBtn.setOnClickListener(v -> {
             if (clickNumber > 5) {
@@ -407,20 +435,32 @@ public class MainActivity extends XWalkActivity {
         }, 5000);
         //Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 48 * 60 * 60 * 1000);
 
-        if (sharedPref.getBoolean("autoStartWifiDirect", true)) {
-            createAP();
+
+        if (sharedPref.getBoolean("autoStartWifiDirect", false)) {
+            autoStartWifiDirectCheckbox.setChecked(true);
+            new Handler().postDelayed(() -> {
+                createAP();
+                createReadLogThread();
+            }, 12000);
+        }
+        bluetoothServer = new BluetoothServer();
+        new android.os.Handler().postDelayed(() -> bluetoothServer.init(this, !sharedPref.getBoolean("autoStartWifiDirect", false)), 5000);
+
+        autoStartWifiDirectCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> sharedPref.edit().putBoolean("autoStartWifiDirect", isChecked).apply());
+
+        if (autoReloadValue) {
+            if (!secondaryDeviceActive) utils.startProgram();
+            new android.os.Handler().postDelayed(
+                    () -> {
+                        if (xWalkWebView.getVisibility() != View.VISIBLE) startWebview();
+                    },
+                    30000);
         }
     }
 
     private void disableIpv6() {
-        if (EnvUtils.isRooted()) {
-            try {
-                Runtime.getRuntime().exec(new String[]{"su", "-c", "echo 0 > /proc/sys/net/ipv6/conf/wlan0/accept_ra"});
-                Runtime.getRuntime().exec(new String[]{"su", "-c", "echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6"});
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        shell("echo 0 > /proc/sys/net/ipv6/conf/wlan0/accept_ra");
+        shell("echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6");
     }
 
     WifiManager.WifiLock mWifiLock = null;
@@ -433,8 +473,10 @@ public class MainActivity extends XWalkActivity {
     private void holdWifiLock() {
         WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
 
-        if (mWifiLock == null)
+        if (mWifiLock == null) {
+            assert wifiManager != null;
             mWifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL, TAG);
+        }
 
         mWifiLock.setReferenceCounted(false);
 
@@ -449,21 +491,20 @@ public class MainActivity extends XWalkActivity {
         Handler handler = new Handler(Looper.getMainLooper());
         handler.postDelayed(() -> lockRestartWifi = false, 20000);
         WifiManager wifiManager = (WifiManager) this.getSystemService(Context.WIFI_SERVICE);
+        assert wifiManager != null;
         wifiManager.setWifiEnabled(false);
         Handler handler2 = new Handler(Looper.getMainLooper());
         handler2.postDelayed(() -> {
             wifiManager.setWifiEnabled(true);
             Handler handler3 = new Handler(Looper.getMainLooper());
-            handler3.postDelayed(() -> createAP(), 4000);
+            handler3.postDelayed(this::createAP, 4000);
         }, 2000);
     }
 
     public void createReadLogThread() {
         try {
-
             Runtime.getRuntime().exec("logcat -c");
-
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
         try {
             logcat = Runtime.getRuntime().exec(new String[]{"logcat"});
@@ -472,12 +513,17 @@ public class MainActivity extends XWalkActivity {
         }
         logThread = new Thread(() -> {
             try {
+                FileOutputStream fOut = new FileOutputStream(new File(getApplicationInfo().dataDir + "/starkasse/apk.log"), true);
+                OutputStreamWriter osw = new OutputStreamWriter(fOut);
                 BufferedReader br = new BufferedReader(new InputStreamReader(logcat.getInputStream()), 1024);
                 String line;
                 while ((line = br.readLine()) != null) {
                     try {
+                        if (line.contains("starkasse")) {
+                            osw.append(line);
+                        }
                         //AP-STA-DISCONNECTED
-                        if (line.contains("wpa_sm_step()")) {
+                        if (line.contains("wpa_sm_step()") || line.contains("P2P-GROUP-REMOVED p2p-wlan0-0 GO reason=UNAVAILABLE")) {
                             if (APrunning && !lockRestartWifi) {
                                 disconnectTimes++;
                                 if (disconnectTimes >= 0) {
@@ -511,6 +557,14 @@ public class MainActivity extends XWalkActivity {
             @Override
             public void onSuccess() {
                 APrunning = true;
+                /*new Handler().postDelayed(() -> {
+                    try {
+                        Log.d("mongo", "setup mtu !");
+                        Runtime.getRuntime().exec(new String[]{"su", "-c", "ifconfig p2p-wlan0-0 mtu 400"});
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }, 2000);*/
             }
 
             @Override
@@ -601,15 +655,7 @@ public class MainActivity extends XWalkActivity {
     }
 
     public void setSystemUIEnabled(boolean enabled) {
-        try {
-            Process p = Runtime.getRuntime().exec("su");
-            DataOutputStream os = new DataOutputStream(p.getOutputStream());
-            os.writeBytes("pm " + (enabled ? "enable" : "disable") + " com.android.systemui\n");
-            os.writeBytes("exit\n");
-            os.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        shell(String.format("pm %s com.android.systemui", enabled ? "enable" : "disable"));
     }
 
     void reconnect() {
@@ -638,7 +684,7 @@ public class MainActivity extends XWalkActivity {
 
     private void stop() {
         utils.stopNode();
-        utils.stopMongo();
+        //utils.stopMongo();
         //EnvUtils.cli(MainActivity.this, "-p linux stop", "-u");
     }
 
@@ -743,6 +789,11 @@ public class MainActivity extends XWalkActivity {
         }
     }
 
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+    }
+
     public void restart() {
         Log.v("RESTART", "RESTART");
         runOnUiThread(() -> {
@@ -761,21 +812,15 @@ public class MainActivity extends XWalkActivity {
             public void run() {
                 utils.stopNode();
                 utils.stopMongo();
-                try {
-                    Runtime.getRuntime().exec(new String[]{"su", "-c", "reboot -p"});
-                } catch (Exception e) {
-                }
+                shell("am start -a android.intent.action.ACTION_REQUEST_SHUTDOWN --ez KEY_CONFIRM true --activity-clear-task");
             }
         };
 
         thread.start();
     }
 
-    public void reboot() {
-        try {
-            Runtime.getRuntime().exec(new String[]{"su", "-c", "reboot now"});
-        } catch (IOException e) {
-        }
+    static public void reboot() {
+        shell("am start -a android.intent.action.REBOOT");
     }
 
 
@@ -825,9 +870,9 @@ public class MainActivity extends XWalkActivity {
         });
     }
 
-    private void startTeamviewer() {
+    public void startTeamviewer() {
         config = new TVSessionConfiguration.Builder(
-                new TVConfigurationID("p6m8ftq"))
+                new TVConfigurationID("dzqyjqu"))
                 .setServiceCaseName("Support")
                 .setServiceCaseDescription("Remote Support")
                 .build();
@@ -884,6 +929,20 @@ public class MainActivity extends XWalkActivity {
 
     @Override
     protected void onXWalkReady() {
+        xWalkWebView.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    switch (keyCode) {
+                        case KeyEvent.KEYCODE_BACK:
+                            //do nothing
+                            break;
+                    }
+                }
+                return false;
+            }
+        });
+
         // Set UI Client (Start stop animations)
         xWalkWebView.setUIClient(new XWalkUIClient(xWalkWebView) {
             boolean first = false;
@@ -924,15 +983,7 @@ public class MainActivity extends XWalkActivity {
 
         final JsInterface jsInterface = new JsInterface(this);
         xWalkWebView.addJavascriptInterface(jsInterface, "Android");
-
-        if (autoReloadValue) {
-            if (!secondaryDeviceActive) utils.startProgram();
-            new android.os.Handler().postDelayed(
-                    () -> {
-                        if (xWalkWebView.getVisibility() != View.VISIBLE) startWebview();
-                    },
-                    10000);
-        }
+        xWalkWebView.clearCache(true);
     }
 
     @Override
@@ -949,7 +1000,6 @@ public class MainActivity extends XWalkActivity {
                     }
                 }
             }
-
         }
     }
 
