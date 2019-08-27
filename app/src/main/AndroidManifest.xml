@@ -90,11 +90,6 @@
                 <action android:name="android.media.AUDIO_BECOMING_NOISY" />
             </intent-filter>
         </receiver>
-
-        <service
-            android:name=".WakeupService"
-            android:icon="@drawable/ic_launcher"
-            android:label="WakeupService" />
     </application>
 
 

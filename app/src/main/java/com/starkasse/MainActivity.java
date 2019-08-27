@@ -10,6 +10,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -34,12 +35,14 @@ import android.os.Message;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.support.v7.app.AlertDialog;
 import android.text.TextUtils;
 import android.text.format.Formatter;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
@@ -97,6 +100,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     public boolean screenOn = true;
     private OnScreenOffReceiver onScreenOffReceiver;
     public PowerManager.WakeLock wakeLock;
+    public boolean lockState = true;
 
     @InjectView(R.id.disableAdvertising)
     View disableAdvertisingBtn;
@@ -133,11 +137,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     @InjectView(R.id.defaultGateway)
     EditText defaultGatewayEdittext;
 
+    @InjectView(R.id.unlock)
+    Button unlockBtn;
+
     @InjectView(R.id.setWifi)
     Button setWifiBtn;
 
-    @InjectView(R.id.wifiSetting)
-    Button wifiSettingBtn;
 
     @InjectView(R.id.root1)
     View overlay;
@@ -157,6 +162,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     private Intent mServiceIntent;
     private Instrumentation m_Instrumentation;
     private AudioManager mAudioManager;
+    private EditText ipInput;
 
     public void keepWiFiOn(boolean on) {
         if (wifiLock == null) {
@@ -190,6 +196,10 @@ public class MainActivity extends Activity implements SensorEventListener {
     public void onResume() {
 
         super.onResume();  // Always call the superclass method first
+
+        new android.os.Handler().postDelayed(() -> {
+            paused = false;
+        }, 2 * 60 * 1000);
 
         this.registerReceiver(connectionChangeReceiver, new IntentFilter(WifiManager.RSSI_CHANGED_ACTION));
 
@@ -308,8 +318,15 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
 
         @JavascriptInterface
+        public void pageLoaded() {
+            MainActivity.self.pageLoaded = true;
+        }
+
+        @JavascriptInterface
         public void showServerNotOnlineView() {
-            MainActivity.self.showServerNotOnlineView();
+            if (!MainActivity.this.paused) {
+                MainActivity.self.showServerNotOnlineView();
+            }
         }
 
         @JavascriptInterface
@@ -341,9 +358,13 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     public boolean firstFocus = false;
 
+    public boolean paused = false;
+
     @Override
     protected void onPause() {
         super.onPause();
+
+        paused = true;
 
         unregisterReceiver(connectionChangeReceiver);
         unregisterReceiver(this.mBatInfoReceiver);
@@ -367,19 +388,18 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     public void showServerNotOnlineView() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                serverNotOnlineView.setVisibility(View.VISIBLE);
-                mainWebView.setVisibility(View.INVISIBLE);
-                mainWebView.loadUrl("about:blank");
-                checkNetworkAndLoad();
-            }
+        runOnUiThread(() -> {
+            serverNotOnlineView.setVisibility(View.VISIBLE);
+            mainWebView.setVisibility(View.INVISIBLE);
+            mainWebView.loadUrl("about:blank");
+            checkNetworkAndLoad();
         });
     }
 
     private static boolean sFactoryInit = false;
     private AmazonWebKitFactory factory = null;
+
+    boolean pageLoaded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -435,8 +455,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 mainWebView.setVisibility(View.INVISIBLE);
                 serverNotOnlineView.setVisibility(View.VISIBLE);
                 if (!autoReloadValue) return;
-                new android.os.Handler().postDelayed(
-                        () -> {
+                new android.os.Handler().postDelayed(() -> {
                             if (!TextUtils.isEmpty(ip)) {
                                 hasErr = false;
                                 mainWebView.loadUrl("http://" + ip + ":8888");
@@ -453,7 +472,10 @@ public class MainActivity extends Activity implements SensorEventListener {
                     mainWebView.setVisibility(View.VISIBLE);
                     ready = true;
                 }
-
+                mainWebView.loadUrl("javascript:Android.pageLoaded()", null);
+                new android.os.Handler().postDelayed(() -> {
+                    if (!pageLoaded) this.onReceivedError(mainWebView, 0, null, null);
+                }, 500);
             }
         });
 
@@ -466,20 +488,9 @@ public class MainActivity extends Activity implements SensorEventListener {
             mainWebView.setVisibility(View.VISIBLE);
         });
 
+        ipInput = (EditText) findViewById(R.id.ipInput);
 
-        View button = findViewById(R.id.ipSetting);
-        final EditText ipInput = (EditText) findViewById(R.id.ipInput);
-
-        anzahl = 0;
-        button.setOnClickListener(v -> {
-            if (anzahl > 5) findViewById(R.id.inputGroup).setVisibility(View.VISIBLE);
-            anzahl++;
-        });
-
-        findViewById(R.id.okBtn).
-
-                setOnClickListener(v -> sharedPref.edit().putString("ip", ipInput.getText().toString()).commit());
-
+        findViewById(R.id.okBtn).setOnClickListener(v -> sharedPref.edit().putString("ip", ipInput.getText().toString()).apply());
         ipInput.setText(ip);
 
         // sensor
@@ -489,9 +500,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 getSystemService(SENSOR_SERVICE);
         if (sm.getSensorList(Sensor.TYPE_ACCELEROMETER).
 
-                size() != 0)
-
-        {
+                size() != 0) {
             Sensor s = sm.getSensorList(Sensor.TYPE_ACCELEROMETER).get(0);
             sm.registerListener(this, s, SensorManager.SENSOR_DELAY_NORMAL);
         }
@@ -581,6 +590,46 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         //mServiceIntent = new Intent(this, WakeupService.class);
         //if (!ServiceMan.isMyServiceRunning(WakeupService.class, this)) startService(mServiceIntent);
+        changeLockstate();
+        unlockBtn.setOnClickListener(v -> showPasswordDialog());
+    }
+
+    public void changeLockstate() {
+        ipInput.setEnabled(!lockState);
+        wifiNameEdittext.setEnabled(!lockState);
+        wifiPasswordEdittext.setEnabled(!lockState);
+        staticIpEdittext.setEnabled(!lockState);
+        defaultGatewayEdittext.setEnabled(!lockState);
+    }
+
+    public void showPasswordDialog() {
+        LayoutInflater li = LayoutInflater.from(this);
+        View promptsView = li.inflate(R.layout.password, null);
+
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
+
+        // set prompts.xml to alertdialog builder
+        alertDialogBuilder.setView(promptsView);
+
+        final EditText userInput = (EditText) promptsView
+                .findViewById(R.id.editTextPassword);
+
+        // set dialog message
+        alertDialogBuilder
+                .setCancelable(false)
+                .setPositiveButton("OK", (dialog, id) -> {
+                    if (userInput.getText().toString().equals("99")) {
+                        lockState = false;
+                        changeLockstate();
+                    }
+                })
+                .setNegativeButton("Cancel", (dialog, id) -> dialog.cancel());
+
+        // create alert dialog
+        AlertDialog alertDialog = alertDialogBuilder.create();
+
+        // show it
+        alertDialog.show();
     }
 
     public void initWifiSetup() {
@@ -594,13 +643,6 @@ public class MainActivity extends Activity implements SensorEventListener {
             sharedPref.edit().putString("wifiPassword", wifiPasswordEdittext.getText().toString()).apply();
             sharedPref.edit().putString("staticIp", staticIpEdittext.getText().toString()).apply();
             sharedPref.edit().putString("defaultGateway", defaultGatewayEdittext.getText().toString()).apply();
-        });
-
-        anzahlWifiClick = 0;
-        wifiSettingBtn.setOnClickListener(v -> {
-            if (anzahlWifiClick > 5)
-                findViewById(R.id.wifiContainer).setVisibility(View.VISIBLE);
-            anzahlWifiClick++;
         });
     }
 
