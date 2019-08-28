@@ -1,4 +1,4 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;

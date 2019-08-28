@@ -1,16 +1,10 @@
-package com.starkasse;
+package com.gigasource;
 
-import android.content.Context;
 import android.net.LinkAddress;
 import android.net.wifi.WifiConfiguration;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
-import java.util.ArrayList;
 import java.util.List;
 
 /**

@@ -1,4 +1,4 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

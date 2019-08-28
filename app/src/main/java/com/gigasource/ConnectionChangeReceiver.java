@@ -1,4 +1,4 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -10,7 +10,6 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.widget.Toast;
 
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.RunnableFuture;

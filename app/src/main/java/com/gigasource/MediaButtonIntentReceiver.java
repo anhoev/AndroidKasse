@@ -1,17 +1,11 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
-import android.view.View;
-
-import java.util.Timer;
-import java.util.TimerTask;
 
 /**
  * Created by anhtran on 14.11.17.

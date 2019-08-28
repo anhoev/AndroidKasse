@@ -7,7 +7,7 @@ service call activity 42 s16 com.amazon.firelauncher
 
 am startservice -n com.android.systemui/.ImageWallpaper
 
-adb shell pm grant com.starkasse.kasse android.permission.CONTROL_KEYGUARD
+adb shell pm grant com.gigasource.kasse android.permission.CONTROL_KEYGUARD
 
 ACTIVITY MANAGER SERVICES (dumpsys activity services)
   User 0 active services:

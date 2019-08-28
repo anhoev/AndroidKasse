@@ -1,4 +1,4 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
@@ -7,7 +7,6 @@ import android.app.AlarmManager;
 import android.app.Instrumentation;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -55,8 +54,6 @@ import android.widget.TextView;
 
 import com.gigasource.webview3.content_shell_apk.ContentShellWebView;
 import com.koushikdutta.ion.Ion;
-
-import org.chromium.content_public.browser.BrowserStartupController;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -393,14 +390,20 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        try {
-            Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-            intent.setData(Uri.parse("package:com.starkasse"));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent intent = new Intent();
+            String packageName = getPackageName();
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+            if (pm.isIgnoringBatteryOptimizations(packageName))
+                intent.setAction(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            else {
+                intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + packageName));
+            }
             startActivity(intent);
-        } catch (ActivityNotFoundException e) {
-            e.printStackTrace();
         }
-        BrowserStartupController.get(1);
+
         super.onCreate(savedInstanceState);
         self = this;
 
@@ -436,7 +439,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 mainWebView.setVisibility(View.INVISIBLE);
                 serverNotOnlineView.setVisibility(View.VISIBLE);
                 if (!autoReloadValue) return;
-                new android.os.Handler().postDelayed(() -> {
+                new Handler().postDelayed(() -> {
                             if (!TextUtils.isEmpty(ip)) {
                                 hasErr = false;
                                 mainWebView.loadUrl("http://" + ip + ":8888");
@@ -455,7 +458,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }
                 mainWebView.loadUrl("javascript:console.log('abc')");
                 mainWebView.loadUrl("javascript:Android.pageLoaded()");
-                new android.os.Handler().postDelayed(() -> {
+                new Handler().postDelayed(() -> {
                     if (!pageLoaded) this.onReceivedError(view, 0, null, null);
                 }, 500);
             }
@@ -539,7 +542,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if (wifiManager.getWifiState() != WifiManager.WIFI_STATE_ENABLED) {
                 wifiManager.setWifiEnabled(true);
-                new android.os.Handler().postDelayed(
+                new Handler().postDelayed(
                         () -> checkNetworkAndLoad(),
                         7000);
             } else {

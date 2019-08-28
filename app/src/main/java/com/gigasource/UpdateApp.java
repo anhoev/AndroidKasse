@@ -1,4 +1,4 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.content.Context;
 import android.content.Intent;

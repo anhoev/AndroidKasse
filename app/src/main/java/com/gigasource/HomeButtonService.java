@@ -1,20 +1,14 @@
-package com.starkasse;
+package com.gigasource;
 
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.os.IBinder;
-import android.os.PowerManager;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 
 public class HomeButtonService extends Service {
     private LinearLayout layout;
