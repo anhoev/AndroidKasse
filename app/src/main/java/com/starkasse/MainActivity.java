@@ -7,10 +7,9 @@ import android.app.AlarmManager;
 import android.app.Instrumentation;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -20,7 +19,6 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.AudioManager;
-import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -30,11 +28,9 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
 import android.os.PowerManager;
-import android.os.SystemClock;
 import android.provider.Settings;
+import android.support.v4.content.FileProvider;
 import android.support.v7.app.AlertDialog;
 import android.text.TextUtils;
 import android.text.format.Formatter;
@@ -49,26 +45,23 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import com.amazon.android.webkit.AmazonWebKitFactories;
-import com.amazon.android.webkit.AmazonWebKitFactory;
-import com.amazon.android.webkit.AmazonWebSettings;
-import com.amazon.android.webkit.AmazonWebView;
-import com.amazon.android.webkit.AmazonWebViewClient;
+import com.gigasource.webview3.content_shell_apk.ContentShellWebView;
 import com.koushikdutta.ion.Ion;
 
+import org.chromium.content_public.browser.BrowserStartupController;
+
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.Callable;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
@@ -108,7 +101,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     @InjectView(R.id.devView)
     View devView;
 
-    AmazonWebView mainWebView;
+    ContentShellWebView mainWebView;
 
     @InjectView(R.id.loading)
     View loadingView;
@@ -209,7 +202,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         if (!ready) return;
         try {
-            mainWebView.loadUrl("javascript:onResume();", null);
+            mainWebView.loadUrl("javascript:onResume();");
         } catch (Exception e) {
         }
 
@@ -227,9 +220,9 @@ public class MainActivity extends Activity implements SensorEventListener {
             int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 0);
 
             if (level <= 1) {
-                mainWebView.loadUrl("javascript:onBatteryLow && onBatteryLow();", null);
+                mainWebView.loadUrl("javascript:onBatteryLow && onBatteryLow();");
             } else if (level > 5) {
-                mainWebView.loadUrl("javascript:onBatteryEnough && onBatteryEnough();", null);
+                mainWebView.loadUrl("javascript:onBatteryEnough && onBatteryEnough();");
             }
         }
     };
@@ -244,14 +237,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         if ((y < -8 || y > 8) && !lock) {
             lock = true;
             try {
-                mainWebView.loadUrl("javascript:lockTouch();", null);
+                mainWebView.loadUrl("javascript:lockTouch();");
             } catch (Exception e) {
             }
         }
         if ((y > -8 && y < 8) && lock) {
             lock = false;
             try {
-                mainWebView.loadUrl("javascript:unlockTouch();", null);
+                mainWebView.loadUrl("javascript:unlockTouch();");
             } catch (Exception e) {
             }
         }
@@ -288,7 +281,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     public void logout() {
         try {
-            mainWebView.loadUrl("javascript:logout();", null);
+            mainWebView.loadUrl("javascript:logout();");
         } catch (Exception e) {
         }
     }
@@ -396,13 +389,18 @@ public class MainActivity extends Activity implements SensorEventListener {
         });
     }
 
-    private static boolean sFactoryInit = false;
-    private AmazonWebKitFactory factory = null;
-
     boolean pageLoaded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:com.starkasse"));
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            e.printStackTrace();
+        }
+        BrowserStartupController.get(1);
         super.onCreate(savedInstanceState);
         self = this;
 
@@ -416,27 +414,10 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         keepWiFiOn(true);
 
-        if (!sFactoryInit) {
-            factory = AmazonWebKitFactories.getDefaultFactory();
-            if (factory.isRenderProcess(this)) {
-            } else {
-                factory.initialize(this.getApplicationContext());
-                factory.getCookieManager().setAcceptCookie(true);
-
-                sFactoryInit = true;
-            }
-        } else {
-            factory = AmazonWebKitFactories.getDefaultFactory();
-        }
-        if (factory.getWebKitCapabilities().isDeveloperToolsSupported()) {
-            factory.enableDeveloperToolsUnix(this.getPackageName() + ".devtools");
-        }
-
-        mainWebView = (AmazonWebView) findViewById(R.id.webView);
-        factory.initializeWebView(mainWebView, 0xFFFFFF, false, null);
-        AmazonWebSettings webSettings = mainWebView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        mainWebView.clearCache(true);
+        mainWebView = findViewById(R.id.webView);
+//        AmazonWebSettings webSettings = mainWebView.getSettings();
+//        webSettings.setJavaScriptEnabled(true);
+//        mainWebView.clearCache(true);
 
         final JsInterface jsInterface = new JsInterface(this);
         mainWebView.addJavascriptInterface(jsInterface, "Android");
@@ -444,12 +425,12 @@ public class MainActivity extends Activity implements SensorEventListener {
         ip = sharedPref.getString("ip", null);
 
         // Set UI Client (Start stop animations)
-        mainWebView.setWebViewClient(new AmazonWebViewClient() {
+        mainWebView.setWebViewClient(new WebViewClient() {
             public boolean hasErr = false;
 
             @SuppressWarnings("deprecation")
             @Override
-            public void onReceivedError(AmazonWebView view, int errorCode, String description, String
+            public void onReceivedError(WebView view, int errorCode, String description, String
                     failingUrl) {
                 hasErr = true;
                 mainWebView.setVisibility(View.INVISIBLE);
@@ -465,16 +446,17 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
 
             @Override
-            public void onPageFinished(AmazonWebView view, String url) {
+            public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if (!hasErr) {
                     serverNotOnlineView.setVisibility(View.INVISIBLE);
                     mainWebView.setVisibility(View.VISIBLE);
                     ready = true;
                 }
-                mainWebView.loadUrl("javascript:Android.pageLoaded()", null);
+                mainWebView.loadUrl("javascript:console.log('abc')");
+                mainWebView.loadUrl("javascript:Android.pageLoaded()");
                 new android.os.Handler().postDelayed(() -> {
-                    if (!pageLoaded) this.onReceivedError(mainWebView, 0, null, null);
+                    if (!pageLoaded) this.onReceivedError(view, 0, null, null);
                 }, 500);
             }
         });
@@ -694,7 +676,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                         () -> checkNetworkAndLoad(),
                         8000);
             } else {
-                mainWebView.loadUrl("http://" + ip + ":8888", null);
+                mainWebView.loadUrl("http://" + ip + ":8888");
             }
         }
     }
@@ -1020,13 +1002,6 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     }
 
-    public void apkUpdate() {
-        UpdateApp atualizaApp = new UpdateApp();
-        atualizaApp.setContext(getApplicationContext());
-        final String ip = sharedPref.getString("ip", null);
-        atualizaApp.execute("http://" + ip + ":8888/apk/starkasse.apk");
-    }
-
     public void apkUpdate2() {
         runOnUiThread(new Runnable() {
             public int lastStatus;
@@ -1055,9 +1030,22 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     public void installApk() {
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.fromFile(new File("/mnt/sdcard/Download/starkasse.apk")), "application/vnd.android.package-archive");
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        File toInstall = new File("/mnt/sdcard/Download/starkasse.apk");
+        Intent intent;
+        Uri apkUri;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            apkUri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".fileprovider", toInstall);
+            intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            intent.setData(apkUri);
+            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else {
+            apkUri = Uri.fromFile(toInstall);
+            intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+
         startActivity(intent);
     }
 

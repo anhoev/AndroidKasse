@@ -198,7 +198,7 @@
             android:text="Router funktioniert nicht"/>
     </LinearLayout>
 
-    <com.amazon.android.webkit.AmazonWebView
+    <com.gigasource.webview3.content_shell_apk.ContentShellWebView
         android:id="@+id/webView"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
