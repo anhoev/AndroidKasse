@@ -23,19 +23,23 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Display;
-import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 
+import com.gigasource.webview3.content_shell_apk.ContentShellWebView;
 import com.koushikdutta.async.http.server.AsyncHttpServer;
 import com.posin.device.CashDrawer;
 import com.posin.device.CustomerDisplay;
@@ -46,14 +50,7 @@ import com.teamviewer.sdk.screensharing.api.TVSessionConfiguration;
 import com.teamviewer.sdk.screensharing.api.TVSessionCreationCallback;
 import com.teamviewer.sdk.screensharing.api.TVSessionFactory;
 
-import org.xwalk.core.JavascriptInterface;
-import org.xwalk.core.XWalkActivity;
-import org.xwalk.core.XWalkPreferences;
-import org.xwalk.core.XWalkUIClient;
-import org.xwalk.core.XWalkView;
-
 import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -68,10 +65,10 @@ import butterknife.InjectView;
 import static com.starkasse.Utils.shell;
 
 
-public class MainActivity extends XWalkActivity {
+public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "starkasse";
-    XWalkView xWalkWebView;
+    ContentShellWebView contentShellWebView;
 
     final int uiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -174,6 +171,9 @@ public class MainActivity extends XWalkActivity {
     @InjectView(R.id.customerdisplayEnable)
     CheckBox customerdisplayEnableCheckbox;
 
+    @InjectView(R.id.btnTest)
+    Button btnTest;
+
     static CustomerPresentation presentation;
     private BluetoothServer bluetoothServer;
     static WifiManager wifiManager;
@@ -202,7 +202,7 @@ public class MainActivity extends XWalkActivity {
     private int backPressedTime;
 
     void showLoading() {
-        xWalkWebView.setVisibility(View.INVISIBLE);
+        contentShellWebView.setVisibility(View.INVISIBLE);
         main.setVisibility(View.INVISIBLE);
         loadingView.setVisibility(View.VISIBLE);
     }
@@ -229,7 +229,7 @@ public class MainActivity extends XWalkActivity {
         if (backPressedTime > 7) {
             //super.onBackPressed();
             runOnUiThread(() -> {
-                MainActivity.this.xWalkWebView.setVisibility(View.INVISIBLE);
+                MainActivity.this.contentShellWebView.setVisibility(View.INVISIBLE);
                 hideLoading();
             });
             new Handler().postDelayed(() -> {
@@ -267,10 +267,10 @@ public class MainActivity extends XWalkActivity {
 
         findViewById(R.id.stopLinux).setOnClickListener(v -> stop());
 
-        xWalkWebView = (XWalkView) findViewById(R.id.xwalkWebView);
+        contentShellWebView = (ContentShellWebView) findViewById(R.id.contentShellWebView);
 
-        XWalkPreferences.setValue(XWalkPreferences.REMOTE_DEBUGGING, true);
-
+        //TODO: remove or not?
+//        XWalkPreferences.setValue(XWalkPreferences.REMOTE_DEBUGGING, true);
 
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().getDecorView().setSystemUiVisibility(uiVisibility);
@@ -452,10 +452,39 @@ public class MainActivity extends XWalkActivity {
             if (!secondaryDeviceActive) utils.startProgram();
             new android.os.Handler().postDelayed(
                     () -> {
-                        if (xWalkWebView.getVisibility() != View.VISIBLE) startWebview();
+                        if (contentShellWebView.getVisibility() != View.VISIBLE) startWebview();
                     },
                     30000);
         }
+
+        contentShellWebView.setWebViewClient(new WebViewClient() {
+            public boolean hasErr = false;
+
+            @SuppressWarnings("deprecation")
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String
+                    failingUrl) {
+                hasErr = true;
+                contentShellWebView.setVisibility(View.INVISIBLE);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (!hasErr) {
+                    contentShellWebView.setVisibility(View.VISIBLE);
+                }
+                contentShellWebView.loadUrl("javascript:Android.pageLoaded()");
+            }
+        });
+
+        final JsInterface jsInterface = new JsInterface(this);
+        contentShellWebView.addJavascriptInterface(jsInterface, "Android");
+
+        btnTest.setOnClickListener(v -> {
+            contentShellWebView.loadUrl("http://192.168.10.251:8888/");
+            contentShellWebView.setVisibility(View.VISIBLE);
+        });
     }
 
     private void disableIpv6() {
@@ -709,7 +738,7 @@ public class MainActivity extends XWalkActivity {
         @JavascriptInterface
         public void devMode() {
             runOnUiThread(() -> {
-                MainActivity.this.xWalkWebView.setVisibility(View.INVISIBLE);
+                MainActivity.this.contentShellWebView.setVisibility(View.INVISIBLE);
                 hideLoading();
             });
         }
@@ -900,9 +929,9 @@ public class MainActivity extends XWalkActivity {
     public void startWebview() {
         runOnUiThread(() -> {
             if (secondaryDeviceActive) {
-                xWalkWebView.loadUrl("http://" + ipAddressForSecondaryDevice + ":8888?secondaryDevice");
+                contentShellWebView.loadUrl("http://" + ipAddressForSecondaryDevice + ":8888?secondaryDevice");
             } else {
-                xWalkWebView.loadUrl("http://localhost:8888");
+                contentShellWebView.loadUrl("http://localhost:8888");
             }
 
             try {
@@ -927,64 +956,69 @@ public class MainActivity extends XWalkActivity {
     private ValueCallback<Uri> mUploadMessage;
     private final static int FILECHOOSER_RESULTCODE = 1;
 
-    @Override
-    protected void onXWalkReady() {
-        xWalkWebView.setOnKeyListener(new View.OnKeyListener() {
-            @Override
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                    switch (keyCode) {
-                        case KeyEvent.KEYCODE_BACK:
-                            //do nothing
-                            break;
-                    }
-                }
-                return false;
-            }
-        });
-
-        // Set UI Client (Start stop animations)
-        xWalkWebView.setUIClient(new XWalkUIClient(xWalkWebView) {
-            boolean first = false;
-
-            @Override
-            public void onPageLoadStopped(final XWalkView view, final String url, final LoadStatus status) {
-                runOnUiThread(() -> {
-                    if (!url.isEmpty() && status == LoadStatus.FAILED) {
-                        view.setVisibility(View.GONE);
-                        new android.os.Handler().postDelayed(
-                                () -> {
-
-                                    first = true;
-                                    xWalkWebView.setVisibility(View.VISIBLE);
-                                    if (secondaryDeviceActive) {
-                                        xWalkWebView.loadUrl("http://" + ipAddressForSecondaryDevice + ":8888?secondaryDevice");
-                                    } else {
-                                        xWalkWebView.loadUrl("http://localhost:8888");
-                                    }
-
-                                },
-                                5000);
-                    } else {
-                        xWalkWebView.setVisibility(View.VISIBLE);
-                    }
-                });
-            }
-
-            @Override
-            public void openFileChooser(XWalkView view, ValueCallback<Uri> uploadFile, String acceptType, String capture) {
-                mUploadMessage = uploadFile;
-                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-                i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("image/*");
-                startActivityForResult(Intent.createChooser(i, "File Chooser"), FILECHOOSER_RESULTCODE);
-            }
-        });
-
-        final JsInterface jsInterface = new JsInterface(this);
-        xWalkWebView.addJavascriptInterface(jsInterface, "Android");
-        xWalkWebView.clearCache(true);
-    }
+    // TODO: check this
+//    @Override
+//    protected void onXWalkReady() {
+//        contentShellWebView.setOnKeyListener(new View.OnKeyListener() {
+//            @Override
+//            public boolean onKey(View v, int keyCode, KeyEvent event) {
+//                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+//                    switch (keyCode) {
+//                        case KeyEvent.KEYCODE_BACK:
+//                            //do nothing
+//                            break;
+//                    }
+//                }
+//                return false;
+//            }
+//        });
+//
+//        //TODO: check this
+//        // Set UI Client (Start stop animations)
+//        contentShellWebView.setWebViewClient(new WebViewClient(contentShellWebView) {
+//            boolean first = false;
+//
+//            @Override
+//            public void onPageLoadStopped(final XWalkView view, final String url, final LoadStatus status) {
+//                runOnUiThread(() -> {
+//                    if (!url.isEmpty() && status == LoadStatus.FAILED) {
+//                        view.setVisibility(View.GONE);
+//                        new android.os.Handler().postDelayed(
+//                                () -> {
+//
+//                                    first = true;
+//                                    contentShellWebView.setVisibility(View.VISIBLE);
+//                                    if (secondaryDeviceActive) {
+//                                        contentShellWebView.loadUrl("http://" + ipAddressForSecondaryDevice + ":8888?secondaryDevice");
+//                                    } else {
+//                                        contentShellWebView.loadUrl("http://localhost:8888");
+//                                    }
+//
+//                                },
+//                                5000);
+//                    } else {
+//                        contentShellWebView.setVisibility(View.VISIBLE);
+//                    }
+//                });
+//            }
+//
+//            @Override
+//            public void openFileChooser(XWalkView view, ValueCallback<Uri> uploadFile, String acceptType, String capture) {
+//                mUploadMessage = uploadFile;
+//                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+//                i.addCategory(Intent.CATEGORY_OPENABLE);
+//                i.setType("image/*");
+//                startActivityForResult(Intent.createChooser(i, "File Chooser"), FILECHOOSER_RESULTCODE);
+//            }
+//        });
+//
+//        contentShellWebView.setWebViewClient(new WebViewClient());
+//
+//        final JsInterface jsInterface = new JsInterface(this);
+//        contentShellWebView.addJavascriptInterface(jsInterface, "Android");
+//        //TODO: check this
+//        contentShellWebView.clearCache(true);
+//    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent intent) {

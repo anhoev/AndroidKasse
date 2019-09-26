@@ -24,6 +24,15 @@
                 android:text="Start" />
 
             <Button
+                android:id="@+id/btnTest"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="50dp"
+                android:layout_weight=".33"
+                android:text="Test"
+                android:visibility="visible" />
+
+            <Button
                 android:id="@+id/stopLinux"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -77,13 +86,6 @@
                     android:text="2. Kasse"
                     android:textColor="@android:color/white" />
 
-                <EditText
-                    android:id="@+id/ipAddressForSecondaryDevice"
-                    android:layout_width="300dp"
-                    android:layout_height="38dp"
-                    android:background="@android:color/white"
-                    android:visibility="gone" />
-
                 <CheckBox
                     android:id="@+id/autoStartWifiDirect"
                     android:layout_width="wrap_content"
@@ -99,6 +101,13 @@
                     android:layout_marginRight="20dp"
                     android:text="customerdisplay"
                     android:textColor="@android:color/white" />
+
+                <EditText
+                    android:id="@+id/ipAddressForSecondaryDevice"
+                    android:layout_width="300dp"
+                    android:layout_height="38dp"
+                    android:background="@android:color/white"
+                    android:visibility="gone" />
 
             </LinearLayout>
 
@@ -171,53 +180,53 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/startMongo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Start mongo" />
+                    android:text="Start mongo"
+                    android:visibility="gone" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/startNode"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Start nodejs" />
+                    android:text="Start nodejs"
+                    android:visibility="gone" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/stopMongo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Stop mongo" />
+                    android:text="Stop mongo"
+                    android:visibility="gone" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/stopNode"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Stop nodejs" />
+                    android:text="Stop nodejs"
+                    android:visibility="gone" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/repairMongo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Repair Mongo" />
+                    android:text="Repair Mongo"
+                    android:visibility="gone" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/downloadDataFromSmb"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Download Data" />
+                    android:text="Download Data"
+                    android:visibility="gone" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/reinstallApk"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="reinstall apk" />
+                    android:text="reinstall apk"
+                    android:visibility="gone" />
 
             </LinearLayout>
 
@@ -245,18 +254,12 @@
                     android:layout_height="wrap_content"
                     android:text="enable system ui" />
 
-                <EditText
-                    android:id="@+id/usbPath"
-                    android:layout_width="300dp"
-                    android:layout_height="38dp"
-                    android:background="@android:color/white" />
-
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/copyFromUsb"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Copy From Usb" />
+                    android:text="Copy From Usb"
+                    android:visibility="gone" />
 
                 <Button
                     android:id="@+id/deployScript"
@@ -265,11 +268,17 @@
                     android:text="Deploy" />
 
                 <Button
-                    android:visibility="gone"
                     android:id="@+id/deployScript2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Deploy Teamviewer" />
+                    android:text="Deploy Teamviewer"
+                    android:visibility="gone" />
+
+                <EditText
+                    android:id="@+id/usbPath"
+                    android:layout_width="300dp"
+                    android:layout_height="38dp"
+                    android:background="@android:color/white" />
 
             </LinearLayout>
         </LinearLayout>
@@ -293,8 +302,8 @@
             android:textColor="@android:color/white" />
     </LinearLayout>
 
-    <org.xwalk.core.XWalkView
-        android:id="@+id/xwalkWebView"
+    <com.gigasource.webview3.content_shell_apk.ContentShellWebView
+        android:id="@+id/contentShellWebView"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:background="#000000"

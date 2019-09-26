@@ -1,7 +1,6 @@
 package com.starkasse;
 
 import android.content.Context;
-import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
@@ -9,7 +8,6 @@ import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
-import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -19,7 +17,6 @@ import com.koushikdutta.async.http.server.AsyncHttpServer;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.w3c.dom.Text;
 
 import java.io.File;
 import java.util.List;
@@ -103,7 +100,7 @@ public class ConfigServer {
 
             try {
                 address = json.getString("url");
-                runOnUiThread(() -> context.xWalkWebView.loadUrl(address));
+                runOnUiThread(() -> context.contentShellWebView.loadUrl(address));
             } catch (JSONException e) {
             }
         });
